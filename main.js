@@ -1,5 +1,5 @@
 // --- Import ពី File ជំនួយរួម ---
-import { db, auth, leaveRequestsCollectionPath, outRequestsCollectionPath, allowedAreaCoords, LOCATION_FAILURE_MESSAGE } from './Firebase-config.js';
+import { db, auth, leaveRequestsCollectionPath, outRequestsCollectionPath, allowedAreaCoords, LOCATION_FAILURE_MESSAGE } from './firebase-config.js';
 import { serverTimestamp, Timestamp, doc, setDoc, updateDoc, deleteDoc, getDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { 
     getTodayString, formatDbDateToInput, formatInputDateToDb, addDays, 
@@ -391,7 +391,8 @@ async function startReturnConfirmation(requestId) {
     console.log("startReturnConfirmation called for:", requestId); if (!currentUser || !currentUser.photo) { showCustomAlert("Error", "មិនអាចទាញយករូបថតយោងរបស់អ្នកបានទេ។"); return; } currentReturnRequestId = requestId; if (returnScanModal) returnScanModal.classList.remove('hidden'); if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងព្យាយាមបើកកាមេរ៉ា...'; if (returnScanDebugEl) returnScanDebugEl.textContent = ''; try { if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងវិភាគរូបថតយោង...'; const referenceDescriptor = await getReferenceDescriptor(currentUser.photo); if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងស្នើសុំបើកកាមេរ៉ា...'; const stream = await navigator.mediaDevices.getUserMedia({ video: {} }); if (returnVideo) returnVideo.srcObject = stream; if (returnScanStatusEl) returnScanStatusEl.textContent = 'សូមដាក់មុខរបស់អ្នកឲ្យចំកាមេរ៉ា'; stopAdvancedFaceAnalysis();
         const onSuccess = () => {
             console.log("Return Scan Success!");
-           if (returnVideo && returnVideo.srcObject) {
+            // --- 🚨 នេះ​ជា​កន្លែង​ដែល​បាន​កែ 🚨 ---
+            if (returnVideo && returnVideo.srcObject) {
                 returnVideo.srcObject.getTracks().forEach(track => track.stop());
                 returnVideo.srcObject = null;
             }
