@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>កម្មវិធីសុំច្បាប់ - ឧស្សាហកម្មឌីជីថល</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100">
+
+    <div id="main-app-container" class="max-w-md mx-auto min-h-screen bg-white shadow-lg">         <main id="main-content" class="pb-20" style="height: 100vh; overflow-y: auto;">
+                        <div id="page-home" class="p-6">
+                            </div>
+
+            <div id="page-account" class="p-6 hidden">
+                            </div>
+
+            <div id="page-history" class="p-6 hidden">
+                            </div>
+
+            <div id="page-help" class="p-6 hidden">
+                            </div>
+
+            <div id="page-request-leave" class="p-6 hidden bg-gray-50">
+                            </div>
+
+            <div id="page-request-out" class="p-6 hidden bg-gray-50">
+                            </div>
+
+            <div id="page-daily-attendance" class="hidden h-full">
+                            </div>
+        </main>
+
+        <nav id="bottom-navigation" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-16 bg-white border-t border-gray-200 shadow-md flex justify-around items-center">
+                    </nav>
+    </div>
+
+        <div id="return-scan-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 hidden">
+            </div>
+    <div id="edit-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 hidden p-4">
+            </div>
+    <div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 hidden p-4">
+            </div>
+    <div id="custom-alert-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 hidden p-4">
+            </div>
+    <div id="invoice-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-60 hidden p-4">
+            </div>
+
+
+    <script type="module" src="app.js"></script>
+
+</body>
+</html>
