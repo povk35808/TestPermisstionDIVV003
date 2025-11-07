@@ -1,5 +1,5 @@
 // --- File: face-scanner.js ---
-// === MODIFICATION: ប្រើ SsdMobilenetv1 (ដើម្បីភាពច្បាស់លាស់) តែលុបចោល Logic ស្មុគស្មាញ (ដើម្បីល្បឿន) ===
+// === VERSION 3: ប្រើ SsdMobilenetv1 (ដើម្បីភាពច្បាស់លាស់) តែលុបចោល Logic ស្មុគស្មាញ (ដើម្បីល្បឿន) ===
 
 // --- Internal State & Constants ---
 let userReferenceDescriptor = null;
@@ -35,6 +35,7 @@ export function clearReferenceDescriptor() {
 export async function loadFaceApiModels(modelStatusEl, onReadyCallback) {
     if (!modelStatusEl) return;
     try {
+        // === កំពុងប្រើ Model ធ្ងន់ (SsdMobilenetv1) តាមការស្នើសុំ ===
         console.log("Loading face-api models (SsdMobilenetv1)...");
         modelStatusEl.textContent = 'កំពុងទាញយក Model ស្កេនមុខ...';
         await Promise.all([
@@ -80,6 +81,7 @@ export async function getReferenceDescriptor(userPhotoUrl) {
 
     let referenceDetection;
     try {
+        // === កំពុងប្រើ Model ធ្ងន់ (SsdMobilenetv1) តាមការស្នើសុំ ===
         const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
         referenceDetection = await faceapi.detectSingleFace(referenceImage, options)
             .withFaceLandmarks(true)
@@ -114,11 +116,9 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
     isFaceAnalysisRunning = true;
     lastFaceCheck = 0; // Reset ម៉ោងពិនិត្យចុងក្រោយ
 
-    // --- កំណត់ "ច្បាប់" សម្រាប់ផ្ទៃមុខ ---
-    const VERIFICATION_THRESHOLD = 0.5; // នៅតែប្រើ 0.5 ដើម្បីភាពច្បាស់លាស់
+    const VERIFICATION_THRESHOLD = 0.5; // 0.5 គឺល្អសម្រាប់ SsdMobilenetv1
     
-    // === MODIFICATION: លុបចោលការគណនាដែលធ្វើឲ្យគាំង (minWidth, center, etc.) ===
-    
+    // === កំពុងប្រើ Model ធ្ងន់ (SsdMobilenetv1) តាមការស្នើសុំ ===
     const detectorOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     // --- បង្កើត Loop ថ្មី ដោយប្រើ requestAnimationFrame ---
@@ -141,13 +141,13 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
                 .withFaceLandmarks(true)
                 .withFaceDescriptor();
 
-            // === MODIFICATION: តក្កវិជ្ជាថ្មី (សាមញ្ញជាងមុន) ===
+            // === តក្កវិជ្ជាថ្មី (សាមញ្ញជាងមុន មិនគាំង) ===
             if (!detections) {
                 // ករណីទី១៖ រកមិនឃើញមុខទាល់តែសោះ
                 statusElement.textContent = 'រកមិនឃើញផ្ទៃមុខ...';
                 debugElement.textContent = 'សូមដាក់មុខឲ្យចំរង្វង់'; // ការណែនាំតែមួយគត់
             } else {
-                // ករណីទី២៖ រកឃើញមុខ -> ផ្ទៀងផ្ទាត់ភ្លាម! (មិនពិនិត្យទំហំ ឬ ទីតាំង)
+                // ករណីទី២៖ រកឃើញមុខ -> ផ្ទៀងផ្ទាត់ភ្លាម!
                 statusElement.textContent = 'រកឃើញ! កំពុងផ្ទៀងផ្ទាត់...';
                 const distance = faceapi.euclideanDistance(referenceDescriptor, detections.descriptor);
                 
@@ -165,7 +165,7 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
                     statusElement.textContent = 'មុខមិនត្រឹមត្រូវ... កំពុងព្យាយាមម្តងទៀត';
                 }
             }
-            // === END MODIFICATION ===
+            // === END ===
         
         } catch (error) {
             console.error("Error during face analysis rAF loop:", error);
