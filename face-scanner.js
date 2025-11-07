@@ -1,11 +1,11 @@
 // --- File: face-scanner.js ---
-// === MODIFICATION: បានប្តូរត្រឡប់ទៅ SsdMobilenetv1 វិញ ដើម្បី ភាពច្បាស់លាស់ (Accuracy) ===
+// === MODIFICATION: ប្រើ SsdMobilenetv1 (ដើម្បីភាពច្បាស់លាស់) តែលុបចោល Logic ស្មុគស្មាញ (ដើម្បីល្បឿន) ===
 
 // --- Internal State & Constants ---
 let userReferenceDescriptor = null;
 let isFaceAnalysisRunning = false;
 let lastFaceCheck = 0;
-// === MODIFICATION: ប្តូរទៅ 500ms វិញ សម្រាប់ SsdMobilenetv1 (តុល្យភាព Accuracy និង Performance) ===
+// ប្រើ 500ms សម្រាប់ SsdMobilenetv1 (តុល្យភាព Accuracy និង Performance)
 const FACE_CHECK_INTERVAL = 500; 
 
 /**
@@ -35,19 +35,14 @@ export function clearReferenceDescriptor() {
 export async function loadFaceApiModels(modelStatusEl, onReadyCallback) {
     if (!modelStatusEl) return;
     try {
-        // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1 វិញ ===
         console.log("Loading face-api models (SsdMobilenetv1)...");
         modelStatusEl.textContent = 'កំពុងទាញយក Model ស្កេនមុខ...';
         await Promise.all([
-            // --- Model ធ្ងន់ និង ច្បាស់លាស់ ---
             faceapi.nets.ssdMobilenetv1.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
-            
-            // --- Model ទាំងពីរនេះ នៅដដែល ---
             faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
             faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
         ]);
         modelStatusEl.textContent = 'Model ស្កេនមុខបានទាញយករួចរាល់';
-        // === MODIFICATION: បាន Update Log ===
         console.log("Face-api models loaded successfully (SsdMobilenetv1).");
         if (onReadyCallback) onReadyCallback();
     } catch (error) {
@@ -68,7 +63,6 @@ export async function getReferenceDescriptor(userPhotoUrl) {
     }
     if (!userPhotoUrl) throw new Error("Missing user photo URL");
 
-    // === MODIFICATION: បាន Update Log ===
     console.log("Fetching and computing new reference descriptor (SsdMobilenetv1)...");
     let referenceImage;
     try {
@@ -86,7 +80,6 @@ export async function getReferenceDescriptor(userPhotoUrl) {
 
     let referenceDetection;
     try {
-        // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1Options វិញ ===
         const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
         referenceDetection = await faceapi.detectSingleFace(referenceImage, options)
             .withFaceLandmarks(true)
@@ -109,7 +102,7 @@ export function stopAdvancedFaceAnalysis() {
 }
 
 /**
- * [EXPORT] ចាប់ផ្តើមការវិភាគផ្ទៃមុខកម្រិតខ្ពស់ ដោយប្រើ requestAnimationFrame
+ * [EXPORT] ចាប់ផ្តើមការវិភាគផ្ទៃមុខកម្រិតខ្ពស់ (ແບບសាមញ្ញ មិនគាំង)
  * @param {HTMLVideoElement} videoElement - ធាតុ <video>
  * @param {HTMLElement} statusElement - ធាតុ <p> សម្រាប់បង្ហាញសារ
  * @param {HTMLElement} debugElement - ធាតុ <p> សម្រាប់បង្ហាញ debug
@@ -117,25 +110,15 @@ export function stopAdvancedFaceAnalysis() {
  * @param {Function} onSuccessCallback - Function ដែលត្រូវហៅ (call) នៅពេលផ្ទៀងផ្ទាត់ជោគជ័យ
  */
 export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElement, referenceDescriptor, onSuccessCallback) {
-    console.log("Starting Advanced Face Analysis (rAF)...");
+    console.log("Starting Advanced Face Analysis (Simplified, Non-Lagging)...");
     isFaceAnalysisRunning = true;
     lastFaceCheck = 0; // Reset ម៉ោងពិនិត្យចុងក្រោយ
 
     // --- កំណត់ "ច្បាប់" សម្រាប់ផ្ទៃមុខ ---
-    const VERIFICATION_THRESHOLD = 0.5; // 0.5 គឺល្អសម្រាប់ SsdMobilenetv1
-    const MIN_WIDTH_PERCENT = 0.3;
-    const MAX_WIDTH_PERCENT = 0.7;
-    const CENTER_TOLERANCE_PERCENT = 0.2;
-
-    const videoWidth = videoElement.clientWidth || 256; // ប្រើ 256 (ទំហំ w-64) ជា fallback
-    const videoCenterX = videoWidth / 2;
-    const minPixelWidth = videoWidth * MIN_WIDTH_PERCENT;
-    const maxPixelWidth = videoWidth * MAX_WIDTH_PERCENT;
-    const centerTolerancePixels = videoWidth * CENTER_TOLERANCE_PERCENT;
-
-    console.log(`Analysis Rules: Threshold=<${VERIFICATION_THRESHOLD}, minWidth=${minPixelWidth}px, maxWidth=${maxPixelWidth}px`);
+    const VERIFICATION_THRESHOLD = 0.5; // នៅតែប្រើ 0.5 ដើម្បីភាពច្បាស់លាស់
     
-    // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1Options វិញ ===
+    // === MODIFICATION: លុបចោលការគណនាដែលធ្វើឲ្យគាំង (minWidth, center, etc.) ===
+    
     const detectorOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     // --- បង្កើត Loop ថ្មី ដោយប្រើ requestAnimationFrame ---
@@ -154,48 +137,35 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
                 return;
             }
 
-            // === MODIFICATION: ប្តូរទៅប្រើ SsdMobilenetv1Options ===
             const detections = await faceapi.detectSingleFace(videoElement, detectorOptions)
                 .withFaceLandmarks(true)
                 .withFaceDescriptor();
 
+            // === MODIFICATION: តក្កវិជ្ជាថ្មី (សាមញ្ញជាងមុន) ===
             if (!detections) {
+                // ករណីទី១៖ រកមិនឃើញមុខទាល់តែសោះ
                 statusElement.textContent = 'រកមិនឃើញផ្ទៃមុខ...';
-                debugElement.textContent = 'សូមដាក់មុខក្នុងរង្វង់';
+                debugElement.textContent = 'សូមដាក់មុខឲ្យចំរង្វង់'; // ការណែនាំតែមួយគត់
             } else {
-                const box = detections.detection.box;
-                const faceCenterX = box.x + box.width / 2;
+                // ករណីទី២៖ រកឃើញមុខ -> ផ្ទៀងផ្ទាត់ភ្លាម! (មិនពិនិត្យទំហំ ឬ ទីតាំង)
+                statusElement.textContent = 'រកឃើញ! កំពុងផ្ទៀងផ្ទាត់...';
+                const distance = faceapi.euclideanDistance(referenceDescriptor, detections.descriptor);
+                
+                debugElement.textContent = `ចំងាយ: ${distance.toFixed(2)} (ត្រូវតែ < ${VERIFICATION_THRESHOLD})`;
 
-                if (box.width < minPixelWidth) {
-                    statusElement.textContent = 'សូមរំកលមុខមកជិតបន្តិច';
-                    debugElement.textContent = `ទំហំ: ${Math.round(box.width)}px (តូចពេក)`;
-                }
-                else if (box.width > maxPixelWidth) {
-                    statusElement.textContent = 'សូមរំកលមុខថយក្រោយបន្តិច';
-                    debugElement.textContent = `ទំហំ: ${Math.round(box.width)}px (ធំពេក)`;
-                }
-                else if (Math.abs(faceCenterX - videoCenterX) > centerTolerancePixels) {
-                    statusElement.textContent = 'សូមដាក់មុខនៅចំកណ្តាល';
-                    const distanceToCenter = Math.abs(faceCenterX - videoCenterX);
-                    debugElement.textContent = ` lệch: ${Math.round(distanceToCenter)}px`;
-                }
-                else {
-                    statusElement.textContent = 'រកឃើញ! កំពុងផ្ទៀងផ្ទាត់...';
-                    const distance = faceapi.euclideanDistance(referenceDescriptor, detections.descriptor);
-                    
-                    debugElement.textContent = `ចំងាយ: ${distance.toFixed(2)} (ត្រូវតែ < ${VERIFICATION_THRESHOLD})`;
-
-                    if (distance < VERIFICATION_THRESHOLD) {
-                        statusElement.textContent = 'ផ្ទៀងផ្ទាត់ជោគជ័យ!';
-                        isFaceAnalysisRunning = false; // បញ្ឈប់ Loop
-                        stopVideoTracks(videoElement); // បិទកាមេរ៉ា
-                        onSuccessCallback(); // ហៅ Function ជោគជ័យ
-                        return; // --- ចេញពី Loop ---
-                    } else {
-                        statusElement.textContent = 'មុខមិនត្រឹមត្រូវ... សូមព្យាយាមម្តងទៀត';
-                    }
+                if (distance < VERIFICATION_THRESHOLD) {
+                    // ជោគជ័យ
+                    statusElement.textContent = 'ផ្ទៀងផ្ទាត់ជោគជ័យ!';
+                    isFaceAnalysisRunning = false; // បញ្ឈប់ Loop
+                    stopVideoTracks(videoElement); // បិទកាមេរ៉ា
+                    onSuccessCallback(); // ហៅ Function ជោគជ័យ
+                    return; // --- ចេញពី Loop ---
+                } else {
+                    // បរាជ័យ (មុខមិនត្រឹមត្រូវ)
+                    statusElement.textContent = 'មុខមិនត្រឹមត្រូវ... កំពុងព្យាយាមម្តងទៀត';
                 }
             }
+            // === END MODIFICATION ===
         
         } catch (error) {
             console.error("Error during face analysis rAF loop:", error);
