@@ -48,7 +48,10 @@ export function assignElements() {
  */
 export function bindEventListeners(
     onNavigate, onLogout, onScanFace, onCancelScan, 
-    onSubmitLeave, onCancelLeave, onSubmitOut, onCancelOut,
+    // === START: MODIFICATION (Add new handlers) ===
+    onOpenLeave, onSubmitLeave, onCancelLeave, 
+    onOpenOut, onSubmitOut, onCancelOut,
+    // === END: MODIFICATION ===
     onOpenAttendance, onCloseAttendance,
     onOpenEdit, onSubmitEdit, onCancelEdit,
     onOpenDelete, onSubmitDelete, onCancelDelete,
@@ -70,15 +73,17 @@ export function bindEventListeners(
     if (scanFaceBtn) scanFaceBtn.addEventListener('click', onScanFace);
     if (cancelScanBtn) cancelScanBtn.addEventListener('click', onCancelScan);
 
+    // === START: MODIFICATION (Use new handlers) ===
     // Leave Form
-    if (openLeaveRequestBtn) openLeaveRequestBtn.addEventListener('click', () => showLeaveRequestForm(null)); // currentUser នឹងถูก get ពី app.js
+    if (openLeaveRequestBtn) openLeaveRequestBtn.addEventListener('click', onOpenLeave);
     if (cancelLeaveRequestBtn) cancelLeaveRequestBtn.addEventListener('click', onCancelLeave);
     if (submitLeaveRequestBtn) submitLeaveRequestBtn.addEventListener('click', onSubmitLeave);
 
     // Out Form
-    if (openOutRequestBtn) openOutRequestBtn.addEventListener('click', () => showOutRequestForm(null)); // currentUser នឹងถูก get ពី app.js
+    if (openOutRequestBtn) openOutRequestBtn.addEventListener('click', onOpenOut);
     if (cancelOutRequestBtn) cancelOutRequestBtn.addEventListener('click', onCancelOut);
     if (submitOutRequestBtn) submitOutRequestBtn.addEventListener('click', onSubmitOut);
+    // === END: MODIFICATION ===
 
     // Attendance Page
     if (openDailyAttendanceBtn) openDailyAttendanceBtn.addEventListener('click', onOpenAttendance);
@@ -121,18 +126,15 @@ export function navigateTo(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) targetPage.classList.remove('hidden'); 
 
-    // ពិនិត្យមើលថាតើទំព័រនេះ ជាទំព័រ Full-screen (គ្មាន Bottom Nav) ឬអត់
     const isFullScreenPage = pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance';
 
     if (bottomNav && mainContent) {
         if (isFullScreenPage) {
-            // បើជាទំព័រ Full-screen: លាក់ Nav, លុប Padding
             bottomNav.classList.add('hidden');
-            mainContent.classList.remove('pb-20'); // លុប Padding ខាងក្រោម
+            mainContent.classList.remove('pb-20'); 
         } else {
-            // បើជាទំព័រធម្មតា: បង្ហាញ Nav, បន្ថែម Padding
             bottomNav.classList.remove('hidden');
-            mainContent.classList.add('pb-20'); // បន្ថែម Padding វិញ
+            mainContent.classList.add('pb-20'); 
         }
     }
     
@@ -462,8 +464,11 @@ export function showCriticalError(message) {
 }
 
 // --- Request Forms UI ---
+// === START: MODIFICATION (Remove currentUser check) ===
 export function showLeaveRequestForm(currentUser) {
-    if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។");
+    // Check ត្រូវបានធ្វើឡើងใน app.js 
+    // if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។");
+    
     const reqPhoto = document.getElementById('request-leave-user-photo');
     const reqName = document.getElementById('request-leave-user-name');
     const reqId = document.getElementById('request-leave-user-id');
@@ -482,7 +487,9 @@ export function showLeaveRequestForm(currentUser) {
     navigateTo('page-request-leave');
 }
 export function showOutRequestForm(currentUser) {
-    if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។");
+    // Check ត្រូវបានធ្វើឡើងใน app.js 
+    // if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។");
+
     const reqPhoto = document.getElementById('request-out-user-photo');
     const reqName = document.getElementById('request-out-user-name');
     const reqId = document.getElementById('request-out-user-id');
@@ -499,6 +506,8 @@ export function showOutRequestForm(currentUser) {
     if (submitOutRequestBtn) submitOutRequestBtn.disabled = false;
     navigateTo('page-request-out');
 }
+// === END: MODIFICATION ===
+
 export function getLeaveRequestData() {
     const duration = leaveDurations.includes(leaveDurationSearchInput.value) ? leaveDurationSearchInput.value : null;
     const reason = leaveReasonSearchInput.value;
