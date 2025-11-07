@@ -111,7 +111,7 @@ export function bindEventListeners(
     console.log("UI Event Listeners Bound.");
 }
 
-// === START: MODIFICATION (navigateTo updated for Flexbox/Padding) ===
+// --- Page Navigation ---
 export function navigateTo(pageId) {
     console.log("Navigating to page:", pageId);
     pages.forEach(page => {
@@ -121,18 +121,15 @@ export function navigateTo(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) targetPage.classList.remove('hidden'); 
 
-    // ពិនិត្យមើលថាតើទំព័រនេះ ជាទំព័រ Full-screen (គ្មាន Bottom Nav) ឬអត់
     const isFullScreenPage = pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance';
 
     if (bottomNav && mainContent) {
         if (isFullScreenPage) {
-            // បើជាទំព័រ Full-screen: លាក់ Nav, លុប Padding
             bottomNav.classList.add('hidden');
-            mainContent.classList.remove('pb-20'); // លុប Padding ខាងក្រោម
+            mainContent.classList.remove('pb-20'); 
         } else {
-            // បើជាទំព័រធម្មតា: បង្ហាញ Nav, បន្ថែម Padding
             bottomNav.classList.remove('hidden');
-            mainContent.classList.add('pb-20'); // បន្ថែម Padding វិញ
+            mainContent.classList.add('pb-20'); 
         }
     }
     
@@ -150,8 +147,6 @@ export function navigateTo(pageId) {
     if (mainContent) mainContent.scrollTop = 0;
     if (pageId === 'page-history') showHistoryTab('leave');
 }
-// === END: MODIFICATION ===
-
 
 // --- History Page ---
 function showHistoryTab(tabName, fromSwipe = false) {
@@ -416,12 +411,35 @@ export function showInAppWarning(isClient) {
         if (inAppWarning) inAppWarning.classList.add('hidden');
     }
 }
-export function setFaceModelStatus(status, enableScanButton) {
-    if (modelStatusEl) modelStatusEl.textContent = status;
-    if (enableScanButton && scanFaceBtn) {
-        scanFaceBtn.disabled = (document.getElementById('user-search').value === ''); // Check current selection
+
+// === START: MODIFICATION (Fix Button Logic) ===
+/**
+ * [NEW] អនុគមន៍ថ្មី សម្រាប់គ្រប់គ្រងប៊ូតុង Scan
+ */
+export function updateScanButtonState(selectedId) {
+    if (!scanFaceBtn || !modelStatusEl) {
+        console.warn("Scan button or model status element not found yet.");
+        return;
     }
+    
+    const modelsLoaded = (modelStatusEl.textContent === 'Model ស្កេនមុខបានទាញយករួចរាល់');
+    const userSelected = (selectedId !== null);
+    
+    console.log(`Updating scan button: ModelsLoaded=${modelsLoaded}, UserSelected=${userSelected}`);
+    
+    // ប៊ូតុង
+    scanFaceBtn.disabled = !(modelsLoaded && userSelected);
 }
+
+/**
+ * [MODIFIED] អនុគមន៍នេះ គ្រាន់តែ Set Text, មិនគ្រប់គ្រងប៊ូតុងទៀតទេ
+ */
+export function setFaceModelStatus(status, enableScanButton) {
+    if (status && modelStatusEl) modelStatusEl.textContent = status;
+    // 'enableScanButton' ឈប់ប្រើហើយ
+}
+// === END: MODIFICATION ===
+
 export function showFaceScanModal(show) {
     if (show) {
         if (faceScanModal) faceScanModal.classList.remove('hidden');
