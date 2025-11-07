@@ -42,19 +42,6 @@ body { 
     border-bottom-width: 3px; 
     border-color: transparent; 
 }
-/* Styles for Attendance Iframe Page */
-#attendance-iframe-container {
-    /* 100vh (កម្ពស់​ពេញ) ដក 64px (កម្ពស់ header) */
-    height: calc(100% - 64px); 
-    width: 100%;
-}
-#attendance-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-}
-
-/* --- បន្ថែមកូដខាងក្រោមនេះ --- */
 
 /* Style សម្រាប់ Overlay ណែនាំ (រង្វង់ពងក្រពើ) */
 .scan-overlay {
@@ -84,4 +71,19 @@ body { 
     
     /* ត្រូវប្រាកដថាវាប្រើ object-cover ដើម្បីពេញប្រអប់ការ៉េថ្មី */
     object-fit: cover; 
+}
+
+
+/* === START: MODIFICATION (កែសម្រួលកម្ពស់ Iframe) === */
+#attendance-iframe-container {
+    /* 100% (នៃកម្ពស់ Parent) ដក 64px (កម្ពស់ header) */
+    height: calc(100% - 64px); /* ប្តូរពី 100vh ទៅ 100% */
+    width: 100%;
+}
+/* === END: MODIFICATION === */
+
+#attendance-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
 }
