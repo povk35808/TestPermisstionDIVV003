@@ -121,15 +121,18 @@ export function navigateTo(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) targetPage.classList.remove('hidden'); 
 
+    // ពិនិត្យមើលថាតើទំព័រនេះ ជាទំព័រ Full-screen (គ្មាន Bottom Nav) ឬអត់
     const isFullScreenPage = pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance';
 
     if (bottomNav && mainContent) {
         if (isFullScreenPage) {
+            // បើជាទំព័រ Full-screen: លាក់ Nav, លុប Padding
             bottomNav.classList.add('hidden');
-            mainContent.classList.remove('pb-20'); 
+            mainContent.classList.remove('pb-20'); // លុប Padding ខាងក្រោម
         } else {
+            // បើជាទំព័រធម្មតា: បង្ហាញ Nav, បន្ថែម Padding
             bottomNav.classList.remove('hidden');
-            mainContent.classList.add('pb-20'); 
+            mainContent.classList.add('pb-20'); // បន្ថែម Padding វិញ
         }
     }
     
@@ -423,20 +426,18 @@ export function updateScanButtonState(selectedId) {
     }
     
     const modelsLoaded = (modelStatusEl.textContent === 'Model ស្កេនមុខបានទាញយករួចរាល់');
-    const userSelected = (selectedId !== null);
+    const userSelected = (selectedId !== null && selectedId !== '');
     
-    console.log(`Updating scan button: ModelsLoaded=${modelsLoaded}, UserSelected=${userSelected}`);
+    console.log(`Updating scan button: ModelsLoaded=${modelsLoaded}, UserSelected=${userSelected} (ID: ${selectedId})`);
     
-    // ប៊ូតុង
     scanFaceBtn.disabled = !(modelsLoaded && userSelected);
 }
 
 /**
  * [MODIFIED] អនុគមន៍នេះ គ្រាន់តែ Set Text, មិនគ្រប់គ្រងប៊ូតុងទៀតទេ
  */
-export function setFaceModelStatus(status, enableScanButton) {
+export function setFaceModelStatus(status) {
     if (status && modelStatusEl) modelStatusEl.textContent = status;
-    // 'enableScanButton' ឈប់ប្រើហើយ
 }
 // === END: MODIFICATION ===
 
