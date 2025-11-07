@@ -1,12 +1,12 @@
 // --- File: face-scanner.js ---
-// === MODIFICATION: បានប្តូរទៅប្រើ TinyFaceDetector ដើម្បីល្បឿន ===
+// === MODIFICATION: បានប្តូរត្រឡប់ទៅ SsdMobilenetv1 វិញ ដើម្បី ភាពច្បាស់លាស់ (Accuracy) ===
 
 // --- Internal State & Constants ---
 let userReferenceDescriptor = null;
 let isFaceAnalysisRunning = false;
 let lastFaceCheck = 0;
-// === MODIFICATION: ប្តូរពី 500ms ទៅ 250ms ព្រោះ TinyDetector លឿនជាង ===
-const FACE_CHECK_INTERVAL = 250; 
+// === MODIFICATION: ប្តូរទៅ 500ms វិញ សម្រាប់ SsdMobilenetv1 (តុល្យភាព Accuracy និង Performance) ===
+const FACE_CHECK_INTERVAL = 500; 
 
 /**
  * មុខងារសម្រាប់បិទ tracks របស់វីដេអូ (បិទកាមេរ៉ា)
@@ -35,12 +35,12 @@ export function clearReferenceDescriptor() {
 export async function loadFaceApiModels(modelStatusEl, onReadyCallback) {
     if (!modelStatusEl) return;
     try {
-        // === MODIFICATION: ប្តូរទៅទាញយក TinyFaceDetector ===
-        console.log("Loading face-api models (TinyFaceDetector)...");
+        // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1 វិញ ===
+        console.log("Loading face-api models (SsdMobilenetv1)...");
         modelStatusEl.textContent = 'កំពុងទាញយក Model ស្កេនមុខ...';
         await Promise.all([
-            // --- ប្តូរទៅប្រើ Model ស្រាល និងលឿនជាងមុន ---
-            faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
+            // --- Model ធ្ងន់ និង ច្បាស់លាស់ ---
+            faceapi.nets.ssdMobilenetv1.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
             
             // --- Model ទាំងពីរនេះ នៅដដែល ---
             faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
@@ -48,7 +48,7 @@ export async function loadFaceApiModels(modelStatusEl, onReadyCallback) {
         ]);
         modelStatusEl.textContent = 'Model ស្កេនមុខបានទាញយករួចរាល់';
         // === MODIFICATION: បាន Update Log ===
-        console.log("Face-api models loaded successfully (TinyFaceDetector).");
+        console.log("Face-api models loaded successfully (SsdMobilenetv1).");
         if (onReadyCallback) onReadyCallback();
     } catch (error) {
         console.error("Error ពេលទាញយក Model របស់ face-api:", error);
@@ -69,7 +69,7 @@ export async function getReferenceDescriptor(userPhotoUrl) {
     if (!userPhotoUrl) throw new Error("Missing user photo URL");
 
     // === MODIFICATION: បាន Update Log ===
-    console.log("Fetching and computing new reference descriptor (TinyFaceDetector)...");
+    console.log("Fetching and computing new reference descriptor (SsdMobilenetv1)...");
     let referenceImage;
     try {
         const img = new Image();
@@ -86,9 +86,8 @@ export async function getReferenceDescriptor(userPhotoUrl) {
 
     let referenceDetection;
     try {
-        // === MODIFICATION: ប្តូរទៅប្រើ TinyFaceDetectorOptions ===
-        // យើងប្រើ inputSize: 224 ដើម្បីឲ្យវារកមុខបានល្អ (ទំហំតូចជាងមុន តែលឿន)
-        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224 });
+        // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1Options វិញ ===
+        const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
         referenceDetection = await faceapi.detectSingleFace(referenceImage, options)
             .withFaceLandmarks(true)
             .withFaceDescriptor();
@@ -123,13 +122,12 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
     lastFaceCheck = 0; // Reset ម៉ោងពិនិត្យចុងក្រោយ
 
     // --- កំណត់ "ច្បាប់" សម្រាប់ផ្ទៃមុខ ---
-    // === MODIFICATION: ប្រើ 0.5 ដដែល ព្រោះវាជាកម្រិតសុវត្ថិភាពល្អ ===
-    const VERIFICATION_THRESHOLD = 0.5;
+    const VERIFICATION_THRESHOLD = 0.5; // 0.5 គឺល្អសម្រាប់ SsdMobilenetv1
     const MIN_WIDTH_PERCENT = 0.3;
     const MAX_WIDTH_PERCENT = 0.7;
     const CENTER_TOLERANCE_PERCENT = 0.2;
 
-    const videoWidth = videoElement.clientWidth || 320;
+    const videoWidth = videoElement.clientWidth || 256; // ប្រើ 256 (ទំហំ w-64) ជា fallback
     const videoCenterX = videoWidth / 2;
     const minPixelWidth = videoWidth * MIN_WIDTH_PERCENT;
     const maxPixelWidth = videoWidth * MAX_WIDTH_PERCENT;
@@ -137,8 +135,8 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
 
     console.log(`Analysis Rules: Threshold=<${VERIFICATION_THRESHOLD}, minWidth=${minPixelWidth}px, maxWidth=${maxPixelWidth}px`);
     
-    // === MODIFICATION: បង្កើត TinyFaceDetectorOptions ម្តងបានហើយ ===
-    const detectorOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224 });
+    // === MODIFICATION: ប្តូរត្រឡប់ទៅ SsdMobilenetv1Options វិញ ===
+    const detectorOptions = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 });
 
     // --- បង្កើត Loop ថ្មី ដោយប្រើ requestAnimationFrame ---
     async function analysisLoop(timestamp) {
@@ -156,14 +154,14 @@ export function startAdvancedFaceAnalysis(videoElement, statusElement, debugElem
                 return;
             }
 
-            // === MODIFICATION: ប្តូរទៅប្រើ detectorOptions របស់ TinyDetector ===
+            // === MODIFICATION: ប្តូរទៅប្រើ SsdMobilenetv1Options ===
             const detections = await faceapi.detectSingleFace(videoElement, detectorOptions)
                 .withFaceLandmarks(true)
                 .withFaceDescriptor();
 
             if (!detections) {
                 statusElement.textContent = 'រកមិនឃើញផ្ទៃមុខ...';
-                debugElement.textContent = '';
+                debugElement.textContent = 'សូមដាក់មុខក្នុងរង្វង់';
             } else {
                 const box = detections.detection.box;
                 const faceCenterX = box.x + box.width / 2;
