@@ -2,6 +2,7 @@
 // នេះគឺជា Module ថ្មី សម្រាប់គ្រប់គ្រងរាល់ការផ្លាស់ប្តូរ UI (DOM Manipulation)
 
 import * as Utils from './utils.js'; // សម្រាប់ format កាលបរិច្ឆេទ
+import * as API from './api.js'; // សម្រាប់ផ្ញើសារ Telegram (ក្នុង Timers)
 
 // --- Element References ---
 let userSearchInput, userDropdown, userSearchError, scanFaceBtn, modelStatusEl, faceScanModal, video, scanStatusEl, scanDebugEl, cancelScanBtn, loginFormContainer, inAppWarning, dataLoadingIndicator, rememberMeCheckbox, mainAppContainer, homeUserName, loginPage, bottomNav, userPhotoEl, userNameEl, userIdEl, userGenderEl, userGroupEl, userDepartmentEl, logoutBtn, navButtons, pages, mainContent, requestLeavePage, openLeaveRequestBtn, cancelLeaveRequestBtn, submitLeaveRequestBtn, leaveDurationSearchInput, leaveDurationDropdownEl, leaveSingleDateContainer, leaveDateRangeContainer, leaveSingleDateInput, leaveStartDateInput, leaveEndDateInput, leaveRequestErrorEl, leaveRequestLoadingEl, leaveReasonSearchInput, leaveReasonDropdownEl, historyContainer, historyPlaceholder, criticalErrorDisplay, historyTabLeave, historyTabOut, historyContainerLeave, historyContainerOut, historyPlaceholderLeave, historyPlaceholderOut, historyContent, editModal, editModalTitle, editForm, editRequestId, editDurationSearchInput, editDurationDropdownEl, editSingleDateContainer, editLeaveDateSingle, editDateRangeContainer, editLeaveDateStart, editLeaveDateEnd, editReasonSearchInput, editReasonDropdownEl, editErrorEl, editLoadingEl, submitEditBtn, cancelEditBtn, deleteModal, deleteConfirmBtn, cancelDeleteBtn, deleteRequestId, deleteCollectionType, openOutRequestBtn, requestOutPage, cancelOutRequestBtn, submitOutRequestBtn, outRequestErrorEl, outRequestLoadingEl, outDurationSearchInput, outDurationDropdownEl, outReasonSearchInput, outReasonDropdownEl, outDateInput, returnScanModal, returnVideo, returnScanStatusEl, returnScanDebugEl, cancelReturnScanBtn, customAlertModal, customAlertTitle, customAlertMessage, customAlertOkBtn, customAlertIconWarning, customAlertIconSuccess, invoiceModal, closeInvoiceModalBtn, invoiceModalTitle, invoiceContentWrapper, invoiceContent, invoiceUserName, invoiceUserId, invoiceUserDept, invoiceRequestType, invoiceDuration, invoiceDates, invoiceReason, invoiceStatus, invoiceApprover, invoiceDecisionTime, invoiceRequestId, invoiceReturnInfo, invoiceReturnStatus, invoiceReturnTime, shareInvoiceBtn, invoiceShareStatus, pendingStatusAlert, pendingStatusMessage, openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
@@ -110,7 +111,7 @@ export function bindEventListeners(
     console.log("UI Event Listeners Bound.");
 }
 
-// --- Page Navigation ---
+// === START: MODIFICATION (navigateTo updated for Flexbox/Padding) ===
 export function navigateTo(pageId) {
     console.log("Navigating to page:", pageId);
     pages.forEach(page => {
@@ -120,13 +121,21 @@ export function navigateTo(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) targetPage.classList.remove('hidden'); 
 
-    if (bottomNav) {
-        if (pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance') {
+    // ពិនិត្យមើលថាតើទំព័រនេះ ជាទំព័រ Full-screen (គ្មាន Bottom Nav) ឬអត់
+    const isFullScreenPage = pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance';
+
+    if (bottomNav && mainContent) {
+        if (isFullScreenPage) {
+            // បើជាទំព័រ Full-screen: លាក់ Nav, លុប Padding
             bottomNav.classList.add('hidden');
+            mainContent.classList.remove('pb-20'); // លុប Padding ខាងក្រោម
         } else {
+            // បើជាទំព័រធម្មតា: បង្ហាញ Nav, បន្ថែម Padding
             bottomNav.classList.remove('hidden');
+            mainContent.classList.add('pb-20'); // បន្ថែម Padding វិញ
         }
     }
+    
     if (navButtons) {
         navButtons.forEach(btn => {
             if (btn.dataset.page === pageId) {
@@ -141,6 +150,8 @@ export function navigateTo(pageId) {
     if (mainContent) mainContent.scrollTop = 0;
     if (pageId === 'page-history') showHistoryTab('leave');
 }
+// === END: MODIFICATION ===
+
 
 // --- History Page ---
 function showHistoryTab(tabName, fromSwipe = false) {
@@ -243,6 +254,8 @@ export function renderHistoryList(snapshot, container, placeholder, type, isEdit
         // --- Pending Alert Logic ---
         if (requests.length > 0) {
             const topRequest = requests[0];
+            const historyPage = document.getElementById('page-history'); // Check if user is on history page
+
             if (topRequest.status === 'pending') {
                 const requestedAtTime = topRequest.requestedAt?.toMillis();
                 if (requestedAtTime) {
@@ -271,7 +284,7 @@ export function renderHistoryList(snapshot, container, placeholder, type, isEdit
                             if (historyPage && historyPage.classList.contains('hidden')) return console.log("50s Timer: Canceled (Not on history page).");
                             showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
                             let reminderMsg = `<b>🔔 REMINDER (50s) 🔔</b>\n\nRequest <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> is still pending.`;
-                            API.sendTelegramNotification(reminderMsg); // ហៅ (call) API ដោយផ្ទាល់
+                            API.sendTelegramNotification(reminderMsg); 
                         }, timeTo50s);
                     }
 
@@ -284,7 +297,7 @@ export function renderHistoryList(snapshot, container, placeholder, type, isEdit
                             if (historyPage && historyPage.classList.contains('hidden')) return console.log("120s Timer: Canceled (Not on history page).");
                             showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
                             let reminderMsg = `<b>🔔 SECOND REMINDER (2min) 🔔</b>\n\nRequest <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> has been pending for 2 minutes. Please check.`;
-                            API.sendTelegramNotification(reminderMsg); // ហៅ (call) API ដោយផ្ទាល់
+                            API.sendTelegramNotification(reminderMsg); 
                         }, timeTo120s);
                     }
                 }
