@@ -53,3 +53,35 @@ body { 
     height: 100%;
     border: none;
 }
+
+/* --- បន្ថែមកូដខាងក្រោមនេះ --- */
+
+/* Style សម្រាប់ Overlay ណែនាំ (រង្វង់ពងក្រពើ) */
+.scan-overlay {
+    /* នេះជា Trick សម្រាប់បង្កើត "រន្ធ" នៅកណ្តាល */
+    /* ស្រមោលពណ៌ខ្មៅ ធំមហិមា នៅខាងក្រៅ */
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+    
+    /* កំណត់ទំហំរង្វង់ពងក្រពើ (Oval) */
+    width: 70%;  /* 70% នៃប្រអប់ 256px */
+    height: 85%; /* 85% នៃប្រអប់ 256px */
+    border-radius: 50%; /* ធ្វើឲ្យវាមានរាងពងក្រពើ/មូល */
+    
+    /* ដាក់វានៅចំកណ្តាលប្រអប់ */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* កែសម្រួល Style វីដេអូចាស់ */
+#video, #return-video {
+    /* រក្សា Mirror effect */
+    transform: scaleX(-1);
+    
+    /* ជួយឲ្យ Browser ដំណើរការរលូន */
+    will-change: transform;
+    
+    /* ត្រូវប្រាកដថាវាប្រើ object-cover ដើម្បីពេញប្រអប់ការ៉េថ្មី */
+    object-fit: cover; 
+}
