@@ -2,9 +2,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, getDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// នាំចូល (Import) ពី Modules ផ្សេងទៀត
+// === START: MODIFICATION (Import ថ្មី) ===
 import * as FaceScanner from './face-scanner.js';
-import * as Utils from './utils.js'; // នាំចូល (Import) ពី utils.js
+import * as Utils from './utils.js';
+import * as API from './api.js'; // នាំចូល (Import) ពី api.js
+// === END: MODIFICATION ===
 
 // Enable Firestore debug logging
 setLogLevel('debug');
@@ -23,20 +25,22 @@ let selectedLeaveReason = null;
 let selectedOutDuration = null;
 let selectedOutReason = null;
 
-// === START: MODIFICATION (Global Timers & State) ===
-let pendingAlertTimer20s = null; // Changed from 15s
-let pendingAlertTimer50s = null; // Changed from 30s
-let pendingAlertTimer120s = null; // New timer for 2 minutes
+let pendingAlertTimer20s = null; 
+let pendingAlertTimer50s = null; 
+let pendingAlertTimer120s = null; 
 let toastDisplayTimer = null;
-let isEditing = false; // តាមដាន Edit Modal
-// === END: MODIFICATION ===
+let isEditing = false; 
 
 // المتغيرات​ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន
 let openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
 
+// === START: MODIFICATION (Configs ត្រូវបានលុប) ===
 // --- Google Sheet Config ---
-const SHEET_ID = '1_Kgl8UQXRsVATt_BOHYQjVWYKkRIBA12R-qnsBoSUzc'; const SHEET_NAME = 'បញ្ជឺឈ្មោះរួម'; const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tq=${encodeURIComponent('SELECT E, L, AA, N, G, S WHERE E IS NOT NULL OFFSET 0')}`;
-const BOT_TOKEN = '8284240201:AAEDRGHDcuoQAhkWk7km6I-9csZNbReOPHw'; const CHAT_ID = '1487065922';
+// (ត្រូវបានផ្លាស់ទីទៅ api.js)
+// --- Telegram Bot Config ---
+// (ត្រូវបានផ្លាស់ទីទៅ api.js)
+// === END: MODIFICATION ===
+
 let leaveRequestsCollectionPath, outRequestsCollectionPath;
 const allowedAreaCoords = [ [11.417052769150015, 104.76508285291308], [11.417130005964497, 104.76457396198742], [11.413876386899489, 104.76320488118378], [11.41373800267192, 104.76361527709159] ];
 const LOCATION_FAILURE_MESSAGE = "ការបញ្ជាក់ចូលមកវិញ បរាជ័យ។ \n\nប្រហែលទូរស័ព្ទអ្នកមានបញ្ហា ការកំណត់បើ Live Location ដូច្នោះអ្នកមានជម្រើសមួយទៀតគឺអ្នកអាចទៅបញ្ជាក់ដោយផ្ទាល់នៅការិយាល័យអគារ B ជាមួយក្រុមការងារលោកគ្រូ ដារ៉ូ។";
@@ -88,19 +92,46 @@ document.addEventListener('DOMContentLoaded', async () => {
                 FaceScanner.loadFaceApiModels(modelStatusEl, () => {
                     if (scanFaceBtn) scanFaceBtn.disabled = (selectedUserId === null);
                 });
-            } else { console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។"); if (modelStatusEl) modelStatusEl.textContent = 'Error: មិនអាចទាញយក Library ស្កេនមុខបាន'; } const rememberedUser = localStorage.getItem('leaveAppUser'); if (rememberedUser) { try { const parsedUser = JSON.parse(rememberedUser); if (parsedUser && parsedUser.id) { console.log("Found remembered user:", parsedUser.id); currentUser = parsedUser; showLoggedInState(parsedUser); fetchUsers(); return; } } catch (e) { localStorage.removeItem('leaveAppUser'); } } console.log("No remembered user found, starting normal app flow."); initializeAppFlow(); } } else { console.log("Firebase Auth: No user signed in. Attempting anonymous sign-in..."); signInAnonymously(auth).catch(anonError => { console.error("Error during automatic anonymous sign-in attempt:", anonError); if (criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាច Sign In បានទេ។ ${anonError.message}។ សូម Refresh ម្ដងទៀត។`; } }); } }); try { console.log("Attempting initial Anonymous Sign-In..."); await signInAnonymously(auth); console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in)."); } catch (e) { console.error("Initial Anonymous Sign-In Error:", e); if (e.code === 'auth/operation-not-allowed') { throw new Error("សូមបើក 'Anonymous' sign-in នៅក្នុង Firebase Console។"); } throw new Error(`Firebase Sign-In Error: ${e.message}`); } } catch (e) { console.error("Firebase Initialization/Auth Error:", e); if(criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាចតភ្ជាប់ Firebase បានទេ។ ${e.message}។ សូម Refresh ម្ដងទៀត។`; } if(loginPage) loginPage.classList.add('hidden'); }
+            } else { console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។"); if (modelStatusEl) modelStatusEl.textContent = 'Error: មិនអាចទាញយក Library ស្កេនមុខបាន'; } const rememberedUser = localStorage.getItem('leaveAppUser'); if (rememberedUser) { try { const parsedUser = JSON.parse(rememberedUser); if (parsedUser && parsedUser.id) { console.log("Found remembered user:", parsedUser.id); currentUser = parsedUser; showLoggedInState(parsedUser); initializeAppFlow(true); return; } } catch (e) { localStorage.removeItem('leaveAppUser'); } } console.log("No remembered user found, starting normal app flow."); initializeAppFlow(false); } } else { console.log("Firebase Auth: No user signed in. Attempting anonymous sign-in..."); signInAnonymously(auth).catch(anonError => { console.error("Error during automatic anonymous sign-in attempt:", anonError); if (criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាច Sign In បានទេ។ ${anonError.message}។ សូម Refresh ម្ដងទៀត។`; } }); } }); try { console.log("Attempting initial Anonymous Sign-In..."); await signInAnonymously(auth); console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in)."); } catch (e) { console.error("Initial Anonymous Sign-In Error:", e); if (e.code === 'auth/operation-not-allowed') { throw new Error("សូមបើក 'Anonymous' sign-in នៅក្នុង Firebase Console។"); } throw new Error(`Firebase Sign-In Error: ${e.message}`); } } catch (e) { console.error("Firebase Initialization/Auth Error:", e); if(criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាចតភ្ជាប់ Firebase បានទេ។ ${e.message}។ សូម Refresh ម្ដងទៀត។`; } if(loginPage) loginPage.classList.add('hidden'); }
 
     // --- Main App Logic ---
-    function initializeAppFlow() { console.log("initializeAppFlow called (for non-remembered user)."); console.log("Fetching users for initial login..."); if (dataLoadingIndicator) dataLoadingIndicator.classList.remove('hidden'); fetchUsers(); }
-    async function fetchUsers() { console.log("Fetching users from Google Sheet..."); try { const response = await fetch(GVIZ_URL); if (!response.ok) throw new Error(`Google Sheet fetch failed: ${response.status}`); const text = await response.text(); const match = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s); if (!match || !match[1]) throw new Error("ទម្រង់ការឆ្លើយតបពី Google Sheet មិនត្រឹមត្រូវ"); const json = JSON.parse(match[1]); if (json.table && json.table.rows && json.table.rows.length > 0) { allUsersData = json.table.rows.map(row => ({ id: row.c?.[0]?.v ?? null, name: row.c?.[1]?.v ?? null, photo: row.c?.[2]?.v ?? null, gender: row.c?.[3]?.v ?? null, group: row.c?.[4]?.v ?? null, department: row.c?.[5]?.v ?? null })); console.log(`Fetched ${allUsersData.length} users.`);
-    populateUserDropdown(allUsersData, 'user-search', 'user-dropdown', (id) => { 
-        selectedUserId = id; 
-        FaceScanner.clearReferenceDescriptor();
-        console.log("Reference Descriptor Cleared on populateUserDropdown.");
-        if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់'); 
-        console.log("Selected User ID:", selectedUserId); 
-    });
-        if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); if (loginFormContainer) loginFormContainer.classList.remove('hidden'); } else { throw new Error("រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់"); } } catch (error) { console.error("Error ពេលទាញយកទិន្នន័យ Google Sheet:", error); if (dataLoadingIndicator) { dataLoadingIndicator.innerHTML = `<p class="text-red-600 font-semibold">Error: មិនអាចទាញយកទិន្នន័យបាន</p><p class="text-gray-600 text-sm mt-1">សូមពិនិត្យអ៊ីនធឺណិត និង Refresh ម្ដងទៀត។</p>`; dataLoadingIndicator.classList.remove('hidden'); } } }
+    function initializeAppFlow(isRememberedUser) { 
+        console.log(`initializeAppFlow called (remembered: ${isRememberedUser}).`); 
+        console.log("Fetching users for app..."); 
+        if (!isRememberedUser) {
+            // Only show loading indicator if not remembered (login page)
+            if (dataLoadingIndicator) dataLoadingIndicator.classList.remove('hidden');
+        }
+        fetchUsers(); 
+    }
+
+    // === START: MODIFICATION (Call API.fetchUsers) ===
+    async function fetchUsers() { 
+        try {
+            allUsersData = await API.fetchUsers(); // ហៅ (call) ពី api.js
+            
+            // Populate dropdown (ទោះបីជា logged in ក៏ដោយ ក៏ត្រូវ populate ដែរ เผื่อ user logout)
+            populateUserDropdown(allUsersData, 'user-search', 'user-dropdown', (id) => { 
+                selectedUserId = id; 
+                FaceScanner.clearReferenceDescriptor();
+                console.log("Reference Descriptor Cleared on populateUserDropdown.");
+                if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់'); 
+                console.log("Selected User ID:", selectedUserId); 
+            });
+
+            // Hide loading indicator (on login page)
+            if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); 
+            if (loginFormContainer) loginFormContainer.classList.remove('hidden'); 
+
+        } catch (error) { 
+            console.error("Error ពេលទាញយកទិន្នន័យ Google Sheet:", error); 
+            if (dataLoadingIndicator) { 
+                dataLoadingIndicator.innerHTML = `<p class="text-red-600 font-semibold">Error: មិនអាចទាញយកទិន្នន័យបាន</p><p class="text-gray-600 text-sm mt-1">សូមពិនិត្យអ៊ីនធឺណិត និង Refresh ម្ដងទៀត។</p>`; 
+                dataLoadingIndicator.classList.remove('hidden'); 
+            } 
+        } 
+    }
+    // === END: MODIFICATION ===
 
     // --- Reusable Searchable Dropdown Logic (Performance Fix) ---
     function setupSearchableDropdown(inputId, dropdownId, items, onSelectCallback, allowCustom = false) {
@@ -336,15 +367,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (openLeaveRequestBtn) openLeaveRequestBtn.addEventListener('click', () => { if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។"); const reqPhoto = document.getElementById('request-leave-user-photo'); const reqName = document.getElementById('request-leave-user-name'); const reqId = document.getElementById('request-leave-user-id'); const reqDept = document.getElementById('request-leave-user-department'); if(reqPhoto) reqPhoto.src = currentUser.photo || 'https://placehold.co/60x60/e2e8f0/64748b?text=User'; if(reqName) reqName.textContent = currentUser.name; if(reqId) reqId.textContent = currentUser.id; if(reqDept) reqDept.textContent = currentUser.department || 'មិនមាន'; if (leaveDurationSearchInput) leaveDurationSearchInput.value = ''; if (leaveReasonSearchInput) leaveReasonSearchInput.value = ''; selectedLeaveDuration = null; selectedLeaveReason = null; if (leaveSingleDateContainer) leaveSingleDateContainer.classList.add('hidden'); if (leaveDateRangeContainer) leaveDateRangeContainer.classList.add('hidden'); if (leaveRequestErrorEl) leaveRequestErrorEl.classList.add('hidden'); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = false; navigateTo('page-request-leave'); });
     if (cancelLeaveRequestBtn) cancelLeaveRequestBtn.addEventListener('click', () => navigateTo('page-home'));
-    if (submitLeaveRequestBtn) submitLeaveRequestBtn.addEventListener('click', async () => { selectedLeaveDuration = leaveDurations.includes(leaveDurationSearchInput.value) ? leaveDurationSearchInput.value : null; selectedLeaveReason = leaveReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedLeaveDuration) { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedLeaveReason || selectedLeaveReason.trim() === '') { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (leaveRequestErrorEl) leaveRequestErrorEl.classList.add('hidden'); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.remove('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = true; try { const isSingleDay = singleDayLeaveDurations.includes(selectedLeaveDuration); const startDateInputVal = isSingleDay ? (leaveSingleDateInput ? leaveSingleDateInput.value : Utils.getTodayString('dd/mm/yyyy')) : (leaveStartDateInput ? Utils.formatInputDateToDb(leaveStartDateInput.value) : Utils.getTodayString('dd/mm/yyyy')); const endDateInputVal = isSingleDay ? startDateInputVal : (leaveEndDateInput ? Utils.formatInputDateToDb(leaveEndDateInput.value) : Utils.getTodayString('dd/mm/yyyy')); if (new Date(Utils.formatDbDateToInput(endDateInputVal)) < new Date(Utils.formatDbDateToInput(startDateInputVal))) { throw new Error('"ថ្ងៃបញ្ចប់" មិនអាចនៅមុន "ថ្ងៃចាប់ផ្តើម" បានទេ។'); } const requestId = `leave_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedLeaveDuration, reason: selectedLeaveReason.trim(), startDate: Utils.formatDateToDdMmmYyyy(startDateInputVal), endDate: Utils.formatDateToDdMmmYyyy(endDateInputVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !leaveRequestsCollectionPath) throw new Error("Firestore DB or Collection Path is not initialized."); const requestRef = doc(db, leaveRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (leave) write successful."); const dateString = (startDateInputVal === endDateInputVal) ? startDateInputVal : `ពី ${startDateInputVal} ដល់ ${endDateInputVal}`; let message = `<b>🔔 សំណើសុំច្បាប់ឈប់សម្រាក 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${dateString}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; await sendTelegramNotification(message); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting leave request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = `Error: ${displayError}`; leaveRequestErrorEl.classList.remove('hidden'); } if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = false; } });
+    if (submitLeaveRequestBtn) submitLeaveRequestBtn.addEventListener('click', async () => { selectedLeaveDuration = leaveDurations.includes(leaveDurationSearchInput.value) ? leaveDurationSearchInput.value : null; selectedLeaveReason = leaveReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedLeaveDuration) { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedLeaveReason || selectedLeaveReason.trim() === '') { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (leaveRequestErrorEl) leaveRequestErrorEl.classList.add('hidden'); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.remove('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = true; try { const isSingleDay = singleDayLeaveDurations.includes(selectedLeaveDuration); const startDateInputVal = isSingleDay ? (leaveSingleDateInput ? leaveSingleDateInput.value : Utils.getTodayString('dd/mm/yyyy')) : (leaveStartDateInput ? Utils.formatInputDateToDb(leaveStartDateInput.value) : Utils.getTodayString('dd/mm/yyyy')); const endDateInputVal = isSingleDay ? startDateInputVal : (leaveEndDateInput ? Utils.formatInputDateToDb(leaveEndDateInput.value) : Utils.getTodayString('dd/mm/yyyy')); if (new Date(Utils.formatDbDateToInput(endDateInputVal)) < new Date(Utils.formatDbDateToInput(startDateInputVal))) { throw new Error('"ថ្ងៃបញ្ចប់" មិនអាចនៅមុន "ថ្ងៃចាប់ផ្តើម" បានទេ។'); } const requestId = `leave_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedLeaveDuration, reason: selectedLeaveReason.trim(), startDate: Utils.formatDateToDdMmmYyyy(startDateInputVal), endDate: Utils.formatDateToDdMmmYyyy(endDateInputVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !leaveRequestsCollectionPath) throw new Error("Firestore DB or Collection Path is not initialized."); const requestRef = doc(db, leaveRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (leave) write successful."); const dateString = (startDateInputVal === endDateInputVal) ? startDateInputVal : `ពី ${startDateInputVal} ដល់ ${endDateInputVal}`; let message = `<b>🔔 សំណើសុំច្បាប់ឈប់សម្រាក 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${dateString}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; 
+            await sendTelegramNotification(message); // ហៅ (call) wrapper
+            if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting leave request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = `Error: ${displayError}`; leaveRequestErrorEl.classList.remove('hidden'); } if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = false; } });
 
     // --- Out Request Logic ---
     if (openOutRequestBtn) openOutRequestBtn.addEventListener('click', () => { if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។"); const reqPhoto = document.getElementById('request-out-user-photo'); const reqName = document.getElementById('request-out-user-name'); const reqId = document.getElementById('request-out-user-id'); const reqDept = document.getElementById('request-out-user-department'); if(reqPhoto) reqPhoto.src = currentUser.photo || 'https://placehold.co/60x60/e2e8f0/64748b?text=User'; if(reqName) reqName.textContent = currentUser.name; if(reqId) reqId.textContent = currentUser.id; if(reqDept) reqDept.textContent = currentUser.department || 'មិនមាន'; if (outDurationSearchInput) outDurationSearchInput.value = ''; if (outReasonSearchInput) outReasonSearchInput.value = ''; if (outDateInput) outDateInput.value = Utils.getTodayString('dd/mm/yyyy'); selectedOutDuration = null; selectedOutReason = null; if (outRequestErrorEl) outRequestErrorEl.classList.add('hidden'); if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = false; navigateTo('page-request-out'); });
     if (cancelOutRequestBtn) cancelOutRequestBtn.addEventListener('click', () => navigateTo('page-home'));
-    if (submitOutRequestBtn) submitOutRequestBtn.addEventListener('click', async () => { selectedOutDuration = outDurations.includes(outDurationSearchInput.value) ? outDurationSearchInput.value : null; selectedOutReason = outReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedOutDuration) { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedOutReason || selectedOutReason.trim() === '') { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (outRequestErrorEl) outRequestErrorEl.classList.add('hidden'); if (outRequestLoadingEl) outRequestLoadingEl.classList.remove('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = true; try { const dateVal = outDateInput ? outDateInput.value : Utils.getTodayString('dd/mm/yyyy'); const requestId = `out_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedOutDuration, reason: selectedOutReason.trim(), startDate: Utils.formatDateToDdMmmYyyy(dateVal), endDate: Utils.formatDateToDdMmmYyyy(dateVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !outRequestsCollectionPath) throw new Error("Firestore DB or Out Collection Path is not initialized."); const requestRef = doc(db, outRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (out) write successful."); let message = `<b>🔔 សំណើសុំច្បាប់ចេញក្រៅ 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${requestData.startDate}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; await sendTelegramNotification(message); if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting out request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (outRequestErrorEl) { outRequestErrorEl.textContent = `Error: ${displayError}`; outRequestErrorEl.classList.remove('hidden'); } if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = false; } });
+    if (submitOutRequestBtn) submitOutRequestBtn.addEventListener('click', async () => { selectedOutDuration = outDurations.includes(outDurationSearchInput.value) ? outDurationSearchInput.value : null; selectedOutReason = outReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedOutDuration) { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedOutReason || selectedOutReason.trim() === '') { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (outRequestErrorEl) outRequestErrorEl.classList.add('hidden'); if (outRequestLoadingEl) outRequestLoadingEl.classList.remove('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = true; try { const dateVal = outDateInput ? outDateInput.value : Utils.getTodayString('dd/mm/yyyy'); const requestId = `out_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedOutDuration, reason: selectedOutReason.trim(), startDate: Utils.formatDateToDdMmmYyyy(dateVal), endDate: Utils.formatDateToDdMmmYyyy(dateVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !outRequestsCollectionPath) throw new Error("Firestore DB or Out Collection Path is not initialized."); const requestRef = doc(db, outRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (out) write successful."); let message = `<b>🔔 សំណើសុំច្បាប់ចេញក្រៅ 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${requestData.startDate}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; 
+            await sendTelegramNotification(message); // ហៅ (call) wrapper
+            if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting out request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (outRequestErrorEl) { outRequestErrorEl.textContent = `Error: ${displayError}`; outRequestErrorEl.classList.remove('hidden'); } if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = false; } });
 
+    // === START: MODIFICATION (Call API.sendTelegramNotification) ===
     // --- Telegram Helper ---
-    async function sendTelegramNotification(message) { console.log("Sending Telegram notification..."); try { const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`; const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: 'HTML' }) }); if (!res.ok) { const errBody = await res.text(); console.error("Telegram API error:", res.status, errBody); } else { console.log("Telegram notification sent successfully."); } } catch (e) { console.error("Failed to send Telegram message:", e); } }
+    async function sendTelegramNotification(message) { 
+        // នេះគ្រាន់តែជា Wrapper ទៅកាន់ api.js
+        await API.sendTelegramNotification(message);
+    }
+    // === END: MODIFICATION ===
 
     // --- Custom Alert Modal Logic ---
     function showCustomAlert(title, message, type = 'warning') { if (!customAlertModal) return; if (customAlertTitle) customAlertTitle.textContent = title; if (customAlertMessage) customAlertMessage.textContent = message; if (type === 'success') { if (customAlertIconSuccess) customAlertIconSuccess.classList.remove('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.add('hidden'); } else { if (customAlertIconSuccess) customAlertIconSuccess.classList.add('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.remove('hidden'); } customAlertModal.classList.remove('hidden'); }
@@ -357,7 +397,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         pendingStatusMessage.textContent = message;
         pendingStatusAlert.classList.remove('hidden');
         
-        // Auto-hide after 5 seconds (Changed from 3)
+        // Auto-hide after 5 seconds
         toastDisplayTimer = setTimeout(() => {
             hidePendingAlert();
         }, 5000); 
@@ -370,10 +410,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     function clearAllPendingTimers() {
         if (pendingAlertTimer20s) clearTimeout(pendingAlertTimer20s);
         if (pendingAlertTimer50s) clearTimeout(pendingAlertTimer50s);
-        if (pendingAlertTimer120s) clearTimeout(pendingAlertTimer120s); // Added 120s timer
+        if (pendingAlertTimer120s) clearTimeout(pendingAlertTimer120s);
         pendingAlertTimer20s = null;
         pendingAlertTimer50s = null;
-        pendingAlertTimer120s = null; // Added 120s timer
+        pendingAlertTimer120s = null;
         hidePendingAlert(); 
     }
     // === END: MODIFICATION ===
@@ -417,7 +457,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         console.log(`Top request is pending for ${pendingDurationSec.toFixed(0)} seconds.`);
 
-                        // 1. Timer 20s (Changed from 15s)
+                        // 1. Timer 20s
                         if (pendingDurationSec < 20) {
                             const timeTo20s = (20 - pendingDurationSec) * 1000;
                             console.log(`Scheduling 20s timer in ${timeTo20s.toFixed(0)}ms`);
@@ -430,7 +470,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }, timeTo20s);
                         }
 
-                        // 2. Timer 50s (Changed from 30s) + Telegram Reminder
+                        // 2. Timer 50s + Telegram Reminder
                         if (pendingDurationSec < 50) {
                             const timeTo50s = (50 - pendingDurationSec) * 1000;
                             console.log(`Scheduling 50s timer in ${timeTo50s.toFixed(0)}ms`);
@@ -441,7 +481,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
                                 
-                                // Send Telegram Reminder
                                 let reminderMsg = `<b>🔔 REMINDER (50s) 🔔</b>\n\n`;
                                 reminderMsg += `Request <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> is still pending.`;
                                 sendTelegramNotification(reminderMsg);
@@ -460,7 +499,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
                                 
-                                // Send 2nd Telegram Reminder
                                 let reminderMsg = `<b>🔔 SECOND REMINDER (2min) 🔔</b>\n\n`;
                                 reminderMsg += `Request <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> has been pending for 2 minutes. Please check.`;
                                 sendTelegramNotification(reminderMsg);
