@@ -2,10 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, getDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// ========== START: MODIFICATION (Import ថ្មី) ==========
 // នាំចូល (Import) មុខងារទាំងអស់ពី Module ថ្មី
 import * as FaceScanner from './face-scanner.js';
-// ========== END: MODIFICATION (Import ថ្មី) ==========
 
 // Enable Firestore debug logging
 setLogLevel('debug');
@@ -17,15 +15,12 @@ const firebaseConfig = { apiKey: "AIzaSyDjr_Ha2RxOWEumjEeSdluIW3JmyM76mVk", auth
 let db, auth, userId;
 let historyUnsubscribe = null, outHistoryUnsubscribe = null;
 let allUsersData = [], currentUser = null, selectedUserId = null;
-// --- LINT: userReferenceDescriptor ត្រូវបានផ្លាស់ទីទៅ face-scanner.js ---
 let currentReturnRequestId = null;
 let touchstartX = 0, touchendX = 0, isSwiping = false;
 let selectedLeaveDuration = null;
 let selectedLeaveReason = null;
 let selectedOutDuration = null;
 let selectedOutReason = null;
-
-// --- LINT: Face Analysis State ត្រូវបានផ្លាស់ទីទៅ face-scanner.js ---
 
 // المتغيرات​ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន
 let openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
@@ -99,22 +94,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Setup Dropdowns AFTER elements are available ---
     
-    // ========== START: CRITICAL FIX 1 ==========
     setupSearchableDropdown('user-search', 'user-dropdown', [], (id) => { // Initially empty, populated by fetchUsers
         selectedUserId = id;
         
-        // --- CRITICAL FIX ---
         // លុប "កូនសោគោល" ចាស់ចោល រាល់ពេលជ្រើសរើស User ថ្មី
-        // ========== START: MODIFICATION (Call Module) ==========
         FaceScanner.clearReferenceDescriptor(); 
-        // ========== END: MODIFICATION (Call Module) ==========
         console.log("Reference Descriptor Cleared on User Select.");
-        // --- END CRITICAL FIX ---
 
         if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់');
         console.log("Selected User ID:", selectedUserId);
     });
-    // ========== END: CRITICAL FIX 1 ==========
 
     setupSearchableDropdown('leave-duration-search', 'leave-duration-dropdown', leaveDurationItems, (duration) => { selectedLeaveDuration = duration; updateLeaveDateFields(duration); }, false);
     setupSearchableDropdown('leave-reason-search', 'leave-reason-dropdown', leaveReasonItems, (reason) => { selectedLeaveReason = reason; }, true);
@@ -126,13 +115,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Firebase Initialization & Auth ---
     try { if (!firebaseConfig.projectId) throw new Error("projectId not provided in firebase.initializeApp."); console.log("Initializing Firebase with Config:", firebaseConfig); const app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app); const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; leaveRequestsCollectionPath = `/artifacts/${canvasAppId}/public/data/leave_requests`; outRequestsCollectionPath = `/artifacts/${canvasAppId}/public/data/out_requests`; console.log("Using Firestore Leave Path:", leaveRequestsCollectionPath); console.log("Using Firestore Out Path:", outRequestsCollectionPath); onAuthStateChanged(auth, (user) => { if (user) { console.log("Firebase Auth state changed. User UID:", user.uid); userId = user.uid; function isClient() { const ua = navigator.userAgent || navigator.vendor || window.opera; return ( (ua.indexOf('FBAN') > -1) || (ua.indexOf('FBAV') > -1) || (ua.indexOf('Twitter') > -1) || (ua.indexOf('Telegram') > -1) || (ua.indexOf('WebView') > -1) || (ua.indexOf('wv') > -1) ); } if (isClient()) { console.log("Detected In-App Browser."); if (inAppWarning) inAppWarning.classList.remove('hidden'); if (modelStatusEl) modelStatusEl.textContent = 'សូមបើកក្នុង Browser ពេញលេញ'; if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); } else { console.log("Detected Full Browser."); if (inAppWarning) inAppWarning.classList.add('hidden'); if (typeof faceapi !== 'undefined') { if (scanFaceBtn) scanFaceBtn.disabled = true;
                 
-                // ========== START: MODIFICATION (Call Module) ==========
                 // ហៅ (call) function ពី Module ថ្មី
                 FaceScanner.loadFaceApiModels(modelStatusEl, () => {
                     // នេះគឺជា onReadyCallback
                     if (scanFaceBtn) scanFaceBtn.disabled = (selectedUserId === null);
                 });
-                // ========== END: MODIFICATION (Call Module) ==========
 
             } else { console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។"); if (modelStatusEl) modelStatusEl.textContent = 'Error: មិនអាចទាញយក Library ស្កេនមុខបាន'; } const rememberedUser = localStorage.getItem('leaveAppUser'); if (rememberedUser) { try { const parsedUser = JSON.parse(rememberedUser); if (parsedUser && parsedUser.id) { console.log("Found remembered user:", parsedUser.id); currentUser = parsedUser; showLoggedInState(parsedUser); fetchUsers(); return; } } catch (e) { localStorage.removeItem('leaveAppUser'); } } console.log("No remembered user found, starting normal app flow."); initializeAppFlow(); } } else { console.log("Firebase Auth: No user signed in. Attempting anonymous sign-in..."); signInAnonymously(auth).catch(anonError => { console.error("Error during automatic anonymous sign-in attempt:", anonError); if (criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាច Sign In បានទេ។ ${anonError.message}។ សូម Refresh ម្ដងទៀត។`; } }); } }); try { console.log("Attempting initial Anonymous Sign-In..."); await signInAnonymously(auth); console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in)."); } catch (e) { console.error("Initial Anonymous Sign-In Error:", e); if (e.code === 'auth/operation-not-allowed') { throw new Error("សូមបើក 'Anonymous' sign-in នៅក្នុង Firebase Console។"); } throw new Error(`Firebase Sign-In Error: ${e.message}`); } } catch (e) { console.error("Firebase Initialization/Auth Error:", e); if(criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាចតភ្ជាប់ Firebase បានទេ។ ${e.message}។ សូម Refresh ម្ដងទៀត។`; } if(loginPage) loginPage.classList.add('hidden'); }
 
@@ -141,29 +128,119 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function fetchUsers() { console.log("Fetching users from Google Sheet..."); try { const response = await fetch(GVIZ_URL); if (!response.ok) throw new Error(`Google Sheet fetch failed: ${response.status}`); const text = await response.text(); const match = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s); if (!match || !match[1]) throw new Error("ទម្រង់ការឆ្លើយតបពី Google Sheet មិនត្រឹមត្រូវ"); const json = JSON.parse(match[1]); if (json.table && json.table.rows && json.table.rows.length > 0) { allUsersData = json.table.rows.map(row => ({ id: row.c?.[0]?.v ?? null, name: row.c?.[1]?.v ?? null, photo: row.c?.[2]?.v ?? null, gender: row.c?.[3]?.v ?? null, group: row.c?.[4]?.v ?? null, department: row.c?.[5]?.v ?? null })); console.log(`Fetched ${allUsersData.length} users.`);
     populateUserDropdown(allUsersData, 'user-search', 'user-dropdown', (id) => { 
         selectedUserId = id; 
-        // ========== START: MODIFICATION (Call Module) ==========
         FaceScanner.clearReferenceDescriptor(); // CRITICAL FIX
-        // ========== END: MODIFICATION (Call Module) ==========
         console.log("Reference Descriptor Cleared on populateUserDropdown.");
         if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់'); 
         console.log("Selected User ID:", selectedUserId); 
     });
         if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); if (loginFormContainer) loginFormContainer.classList.remove('hidden'); } else { throw new Error("រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់"); } } catch (error) { console.error("Error ពេលទាញយកទិន្នន័យ Google Sheet:", error); if (dataLoadingIndicator) { dataLoadingIndicator.innerHTML = `<p class="text-red-600 font-semibold">Error: មិនអាចទាញយកទិន្នន័យបាន</p><p class="text-gray-600 text-sm mt-1">សូមពិនិត្យអ៊ីនធឺណិត និង Refresh ម្ដងទៀត។</p>`; dataLoadingIndicator.classList.remove('hidden'); } } }
 
+    
+    // ========== START: MODIFICATION (Dropdown Performance Fix) ==========
     // --- Reusable Searchable Dropdown Logic ---
-    function setupSearchableDropdown(inputId, dropdownId, items, onSelectCallback, allowCustom = false) { const searchInput = document.getElementById(inputId); const dropdown = document.getElementById(dropdownId); if (!searchInput || !dropdown) { console.error(`Dropdown elements not found: inputId=${inputId}, dropdownId=${dropdownId}`); return; } function populateDropdown(filter = '') { dropdown.innerHTML = ''; const filteredItems = items.filter(item => item.text && item.text.toLowerCase().includes(filter.toLowerCase())); if (filteredItems.length === 0 && !allowCustom && inputId !== 'user-search') { /* Allow user dropdown to be empty */ dropdown.classList.add('hidden'); return; } filteredItems.forEach(item => { const itemEl = document.createElement('div'); itemEl.textContent = item.text; itemEl.dataset.value = item.value; itemEl.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm'; itemEl.addEventListener('mousedown', (e) => { e.preventDefault(); searchInput.value = item.text; dropdown.classList.add('hidden'); if (onSelectCallback) onSelectCallback(item.value); console.log(`Selected dropdown item: ${item.text} (value: ${item.value})`); }); dropdown.appendChild(itemEl); }); dropdown.classList.remove('hidden'); } searchInput.addEventListener('input', () => { const currentValue = searchInput.value; populateDropdown(currentValue); const exactMatch = items.find(item => item.text === currentValue); const selection = exactMatch ? exactMatch.value : (allowCustom ? currentValue : null); if (onSelectCallback) onSelectCallback(selection); }); searchInput.addEventListener('focus', () => { populateDropdown(searchInput.value); }); searchInput.addEventListener('blur', () => { setTimeout(() => { dropdown.classList.add('hidden'); const currentValue = searchInput.value; const validItem = items.find(item => item.text === currentValue); if (validItem) { if (onSelectCallback) onSelectCallback(validItem.value); } else if (allowCustom && currentValue.trim() !== '') { if (onSelectCallback) onSelectCallback(currentValue); } else if (inputId !== 'user-search') { /* Don't clear user search on blur */ console.log(`Invalid selection on ${inputId}: ${currentValue}`); if (onSelectCallback) onSelectCallback(null); } }, 150); }); }
+    function setupSearchableDropdown(inputId, dropdownId, items, onSelectCallback, allowCustom = false) {
+        const searchInput = document.getElementById(inputId);
+        const dropdown = document.getElementById(dropdownId);
+        if (!searchInput || !dropdown) {
+            console.error(`Dropdown elements not found: inputId=${inputId}, dropdownId=${dropdownId}`);
+            return;
+        }
+        
+        const MAX_RESULTS_TO_SHOW = 20; // បង្ហាញតែ 20 លទ្ធផលដំបូង (ដើម្បីកុំឲ្យគាំង)
+
+        function populateDropdown(filter = '') {
+            dropdown.innerHTML = '';
+            const filterLower = filter.toLowerCase();
+
+            // បើ Filter ទទេ (ពេលចុច focus) ហើយវាជាប្រអប់ User Search -> បង្ហាញសារ ប្រសើរជាងបង្ហាញ 849 នាក់
+            if (filterLower === '' && inputId === 'user-search') {
+                const itemEl = document.createElement('div');
+                itemEl.textContent = `សូមវាយ ID ឬ ឈ្មោះ (ទិន្នន័យសរុប ${items.length} នាក់)`;
+                itemEl.className = 'px-4 py-2 text-gray-500 text-sm italic';
+                dropdown.appendChild(itemEl);
+                dropdown.classList.remove('hidden');
+                return; // បញ្ឈប់ត្រឹមនេះ (កុំបង្ហាញ 849 នាក់)
+            }
+
+            const filteredItems = items.filter(item => item.text && item.text.toLowerCase().includes(filterLower));
+
+            if (filteredItems.length === 0) {
+                // បង្ហាញ "រកមិនឃើញ" លុះត្រាតែ User កំពុងវាយពិតប្រាកដ
+                if (filterLower !== '') {
+                    const itemEl = document.createElement('div');
+                    itemEl.textContent = 'រកមិនឃើញ...';
+                    itemEl.className = 'px-4 py-2 text-gray-500 text-sm italic';
+                    dropdown.appendChild(itemEl);
+                    dropdown.classList.remove('hidden');
+                } else {
+                    dropdown.classList.add('hidden');
+                }
+                return;
+            }
+            
+            // យកតែ N លទ្ធផលដំបូងមកបង្ហាញ
+            const itemsToShow = filteredItems.slice(0, MAX_RESULTS_TO_SHOW);
+
+            itemsToShow.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.textContent = item.text;
+                itemEl.dataset.value = item.value;
+                itemEl.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+                itemEl.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    searchInput.value = item.text;
+                    dropdown.classList.add('hidden');
+                    if (onSelectCallback) onSelectCallback(item.value);
+                    console.log(`Selected dropdown item: ${item.text} (value: ${item.value})`);
+                });
+                dropdown.appendChild(itemEl);
+            });
+
+            // បើមានលទ្ធផលច្រើនជាងអ្វីដែលយើងបង្ហាញ សូមដាក់សារប្រាប់
+            if (filteredItems.length > MAX_RESULTS_TO_SHOW) {
+                const moreEl = document.createElement('div');
+                moreEl.textContent = `... និង ${filteredItems.length - MAX_RESULTS_TO_SHOW} នាក់ផ្សេងទៀត (សូមវាយបញ្ចូលបន្ថែម)`;
+                moreEl.className = 'px-4 py-2 text-gray-400 text-xs italic';
+                dropdown.appendChild(moreEl);
+            }
+
+            dropdown.classList.remove('hidden');
+        }
+
+        searchInput.addEventListener('input', () => {
+            const currentValue = searchInput.value;
+            populateDropdown(currentValue); // នេះប្រើ Logic ថ្មី
+            const exactMatch = items.find(item => item.text === currentValue);
+            const selection = exactMatch ? exactMatch.value : (allowCustom ? currentValue : null);
+            if (onSelectCallback) onSelectCallback(selection);
+        });
+
+        searchInput.addEventListener('focus', () => {
+            populateDropdown(searchInput.value); // នេះប្រើ Logic ថ្មី
+        });
+
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                dropdown.classList.add('hidden');
+                const currentValue = searchInput.value;
+                const validItem = items.find(item => item.text === currentValue);
+                if (validItem) {
+                    if (onSelectCallback) onSelectCallback(validItem.value);
+                } else if (allowCustom && currentValue.trim() !== '') {
+                    if (onSelectCallback) onSelectCallback(currentValue);
+                } else if (inputId !== 'user-search') {
+                    console.log(`Invalid selection on ${inputId}: ${currentValue}`);
+                    if (onSelectCallback) onSelectCallback(null);
+                }
+            }, 150);
+        });
+    }
+    // ========== END: MODIFICATION (Dropdown Performance Fix) ==========
+
     function populateUserDropdown(users, inputId, dropdownId, onSelectCallback) { const userItems = users.filter(user => user.id && user.name).map(user => ({ text: `${user.id} - ${user.name}`, value: user.id })); setupSearchableDropdown(inputId, dropdownId, userItems, onSelectCallback, false); }
 
     // --- Face Scan Logic ---
 
-    // ========== START: MODIFICATION (Functions moved to module) ==========
-    // Function ទាំងអស់នេះ (loadFaceApiModels, getReferenceDescriptor, 
-    // stopAdvancedFaceAnalysis, startAdvancedFaceAnalysis) 
-    // ត្រូវបានផ្លាស់ទីទៅ face-scanner.js
-    // ========== END: MODIFICATION (Functions moved to module) ==========
-
-
-    // ========== START: MODIFICATION (Function កែសម្រួល) ==========
     /**
      * មុខងារនេះនៅតែស្ថិតក្នុង app.js ព្រោះវាជា "Controller"
      */
@@ -197,7 +274,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // កំណត់អ្វីដែលត្រូវធ្វើនៅពេលជោគជ័យ (Callback)
             const onSuccess = () => {
                 console.log("Login Scan Success!");
-                // មុខងារបិទកាមេរ៉ា ឥឡូវស្ថិតនៅក្នុង Module ហើយ
                 loginUser(selectedUserId); // ដំណើរការ Login
                 setTimeout(() => {
                     if (faceScanModal) faceScanModal.classList.add('hidden');
@@ -235,10 +311,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             video.srcObject = null; 
         } 
     }
-    // ========== END: MODIFICATION (Function កែសម្រួល) ==========
 
 
-    // ========== START: MODIFICATION (Event Listeners កែសម្រួល) ==========
     if (scanFaceBtn) scanFaceBtn.addEventListener('click', startFaceScan);
     if (cancelScanBtn) cancelScanBtn.addEventListener('click', () => { 
         stopFaceScan(); 
@@ -251,7 +325,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (faceScanModal) faceScanModal.classList.add('hidden'); 
     });
-    // ========== END: MODIFICATION (Event Listeners កែសម្រួល) ==========
 
 
     // --- App Navigation & State Logic ---
@@ -388,7 +461,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- RETURN CONFIRMATION LOGIC ---
     function isPointInPolygon(point, polygon) { const [lat, lng] = point; let isInside = false; for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) { const [lat_i, lng_i] = polygon[i]; const [lat_j, lng_j] = polygon[j]; const intersect = ((lng_i > lng) !== (lng_j > lng)) && (lat < (lat_j - lat_i) * (lng - lng_i) / (lng_j - lng_i) + lat_i); if (intersect) isInside = !isInside; } return isInside; }
 
-    // ========== START: MODIFICATION (Function កែសម្រួល) ==========
     /**
      * មុខងារថ្មីសម្រាប់ stopReturnScan
      */
@@ -429,7 +501,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // កំណត់អ្វីដែលត្រូវធ្វើនៅពេលជោគជ័យ (Callback)
             const onSuccess = () => {
                     console.log("Return Scan Success!");
-                    // មុខងារបិទកាមេរ៉ា ឥឡូវស្ថិតនៅក្នុង Module ហើយ
                     // បន្តទៅពិនិត្យទីតាំង
                     handleReturnFaceScanSuccess(); 
                 };
@@ -453,7 +524,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 1500); 
         } 
     }
-    // ========== END: MODIFICATION (Function កែសម្រួល) ==========
 
     if (cancelReturnScanBtn) cancelReturnScanBtn.addEventListener('click', () => { 
         stopReturnScan(true); // ហៅ stopReturnScan (ដែលរួមបញ្ចូលការ stop rAF)
@@ -467,7 +537,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- INVOICE MODAL LOGIC ---
     function hideInvoiceModal() { if (invoiceModal) invoiceModal.classList.add('hidden'); if (invoiceShareStatus) invoiceShareStatus.textContent = ''; if (shareInvoiceBtn) shareInvoiceBtn.disabled = false; }
-    async function openInvoiceModal(requestId, type) { console.log(`--- Attempting to open invoice for ${type} request ID: ${requestId} ---`); if (!db || !requestId || !type) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Missing ID or Type)"); return; } const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; if (!collectionPath) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Invalid Collection Path)"); return; } if (!invoiceModal) { console.error("Invoice modal element not found!"); return; } invoiceModal.classList.remove('hidden'); if(invoiceUserName) invoiceUserName.textContent='កំពុងទាញយក...'; if(invoiceUserId) invoiceUserId.textContent='...'; if(invoiceUserDept) invoiceUserDept.textContent='...'; if(invoiceRequestType) invoiceRequestType.textContent='...'; if(invoiceDuration) invoiceDuration.textContent='...'; if(invoiceDates) invoiceDates.textContent='...'; if(invoiceReason) invoiceReason.textContent='...'; if(invoiceApprover) approver.textContent='...'; if(invoiceDecisionTime) invoiceDecisionTime.textContent='...'; if(invoiceRequestId) invoiceRequestId.textContent='...'; if(invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); if(shareInvoiceBtn) shareInvoiceBtn.disabled = true; try { const docRef = doc(db, collectionPath, requestId); console.log("Fetching Firestore doc:", docRef.path); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { throw new Error("រកមិនឃើញសំណើរនេះទេ។"); } console.log("Firestore doc found."); const data = docSnap.data(); const requestTypeText = (type === 'leave') ? 'ច្បាប់ឈប់សម្រាក' : 'ច្បាប់ចេញក្រៅ'; const decisionTimeText = formatFirestoreTimestamp(data.decisionAt || data.requestedAt); const dateRangeText = (data.startDate === data.endDate) ? data.startDate : `${data.startDate} ដល់ ${data.endDate}`; if(invoiceModalTitle) invoiceModalTitle.textContent = `វិក័យប័ត្រ - ${requestTypeText}`; if(invoiceUserName) invoiceUserName.textContent = data.name || 'N/A'; if(invoiceUserId) invoiceUserId.textContent = data.userId || 'N/A'; if(invoiceUserDept) invoiceUserDept.textContent = data.department || 'N/A'; if(invoiceRequestType) invoiceRequestType.textContent = requestTypeText; if(invoiceDuration) invoiceDuration.textContent = data.duration || 'N/A'; if(invoiceDates) invoiceDates.textContent = dateRangeText; if(invoiceReason) invoiceReason.textContent = data.reason || 'N/Examples/N/A'; if(invoiceApprover) invoiceApprover.textContent = "លោកគ្រូ ពៅ ដារ៉ូ"; if(invoiceDecisionTime) invoiceDecisionTime.textContent = decisionTimeText; if(invoiceRequestId) invoiceRequestId.textContent = data.requestId || requestId; if (type === 'out' && data.returnStatus === 'បានចូលមកវិញ') { if (invoiceReturnStatus) invoiceReturnStatus.textContent = data.returnStatus; if (invoiceReturnTime) invoiceReturnTime.textContent = data.returnedAt || 'N/A'; if (invoiceReturnInfo) invoiceReturnInfo.classList.remove('hidden'); } else { if (invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); } if(shareInvoiceBtn) { shareInvoiceBtn.dataset.requestId = data.requestId || requestId; shareInvoiceBtn.dataset.userName = data.name || 'User'; shareInvoiceBtn.dataset.requestType = requestTypeText; shareInvoiceBtn.disabled = false; } console.log("Invoice modal populated."); } catch (error) { console.error("Error opening/populating invoice modal:", error); hideInvoiceModal(); showCustomAlert("Error", `មិនអាចផ្ទុកទិន្នន័យវិក័យប័ត្របានទេ: ${error.message}`); } }
+    async function openInvoiceModal(requestId, type) { console.log(`--- Attempting to open invoice for ${type} request ID: ${requestId} ---`); if (!db || !requestId || !type) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Missing ID or Type)"); return; } const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; if (!collectionPath) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Invalid Collection Path)"); return; } if (!invoiceModal) { console.error("Invoice modal element not found!"); return; } invoiceModal.classList.remove('hidden'); if(invoiceUserName) invoiceUserName.textContent='កំពុងទាញយក...'; if(invoiceUserId) invoiceUserId.textContent='...'; if(invoiceUserDept) invoiceUserDept.textContent='...'; if(invoiceRequestType) invoiceRequestType.textContent='...'; if(invoiceDuration) invoiceDuration.textContent='...'; if(invoiceDates) invoiceDates.textContent='...'; if(invoiceReason) invoiceReason.textContent='...'; if(invoiceApprover) invoiceApprover.textContent='...'; if(invoiceDecisionTime) invoiceDecisionTime.textContent='...'; if(invoiceRequestId) invoiceRequestId.textContent='...'; if(invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); if(shareInvoiceBtn) shareInvoiceBtn.disabled = true; try { const docRef = doc(db, collectionPath, requestId); console.log("Fetching Firestore doc:", docRef.path); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { throw new Error("រកមិនឃើញសំណើរនេះទេ។"); } console.log("Firestore doc found."); const data = docSnap.data(); const requestTypeText = (type === 'leave') ? 'ច្បាប់ឈប់សម្រាក' : 'ច្បាប់ចេញក្រៅ'; const decisionTimeText = formatFirestoreTimestamp(data.decisionAt || data.requestedAt); const dateRangeText = (data.startDate === data.endDate) ? data.startDate : `${data.startDate} ដល់ ${data.endDate}`; if(invoiceModalTitle) invoiceModalTitle.textContent = `វិក័យប័ត្រ - ${requestTypeText}`; if(invoiceUserName) invoiceUserName.textContent = data.name || 'N/A'; if(invoiceUserId) invoiceUserId.textContent = data.userId || 'N/A'; if(invoiceUserDept) invoiceUserDept.textContent = data.department || 'N/A'; if(invoiceRequestType) invoiceRequestType.textContent = requestTypeText; if(invoiceDuration) invoiceDuration.textContent = data.duration || 'N/A'; if(invoiceDates) invoiceDates.textContent = dateRangeText; if(invoiceReason) invoiceReason.textContent = data.reason || 'N/Examples/N/A'; if(invoiceApprover) invoiceApprover.textContent = "លោកគ្រូ ពៅ ដារ៉ូ"; if(invoiceDecisionTime) invoiceDecisionTime.textContent = decisionTimeText; if(invoiceRequestId) invoiceRequestId.textContent = data.requestId || requestId; if (type === 'out' && data.returnStatus === 'បានចូលមកវិញ') { if (invoiceReturnStatus) invoiceReturnStatus.textContent = data.returnStatus; if (invoiceReturnTime) invoiceReturnTime.textContent = data.returnedAt || 'N/A'; if (invoiceReturnInfo) invoiceReturnInfo.classList.remove('hidden'); } else { if (invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); } if(shareInvoiceBtn) { shareInvoiceBtn.dataset.requestId = data.requestId || requestId; shareInvoiceBtn.dataset.userName = data.name || 'User'; shareInvoiceBtn.dataset.requestType = requestTypeText; shareInvoiceBtn.disabled = false; } console.log("Invoice modal populated."); } catch (error) { console.error("Error opening/populating invoice modal:", error); hideInvoiceModal(); showCustomAlert("Error", `មិនអាចផ្ទុកទិន្នន័យវិក័យប័ត្របានទេ: ${error.message}`); } }
     async function shareInvoiceAsImage() { if (!invoiceContent || typeof html2canvas === 'undefined' || !shareInvoiceBtn) { showCustomAlert("Error", "មុខងារ Share មិនទាន់រួចរាល់ ឬ Library បាត់។"); return; } if(invoiceShareStatus) invoiceShareStatus.textContent = 'កំពុងបង្កើតរូបភាព...'; shareInvoiceBtn.disabled = true; try { if(invoiceContentWrapper) invoiceContentWrapper.scrollTop = 0; await new Promise(resolve => setTimeout(resolve, 100)); const canvas = await html2canvas(invoiceContent, { scale: 2, useCORS: true, logging: false }); canvas.toBlob(async (blob) => { if (!blob) { throw new Error("មិនអាចបង្កើតរូបភាព Blob បានទេ។"); } if(invoiceShareStatus) invoiceShareStatus.textContent = 'កំពុងព្យាយាម Share...'; if (navigator.share && navigator.canShare) { const fileName = `Invoice_${shareInvoiceBtn.dataset.requestId || 'details'}.png`; const file = new File([blob], fileName, { type: blob.type }); const shareData = { files: [file], title: `វិក័យប័ត្រសុំច្បាប់ (${shareInvoiceBtn.dataset.requestType || ''})`, text: `វិក័យប័ត្រសុំច្បាប់សម្រាប់ ${shareInvoiceBtn.dataset.userName || ''} (ID: ${shareInvoiceBtn.dataset.requestId || ''})`, }; if (navigator.canShare(shareData)) { try { await navigator.share(shareData); console.log('Invoice shared successfully via Web Share API'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Share ជោគជ័យ!'; } catch (err) { console.error('Web Share API error:', err); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Share ត្រូវបានបោះបង់។'; if (err.name !== 'AbortError') showCustomAlert("Share Error", "មិនអាច Share បានតាម Web Share API។ សូមព្យាយាមម្តងទៀត។"); } } else { console.warn('Web Share API cannot share this data.'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'មិនអាច Share file បាន។'; showCustomAlert("Share Error", "Browser នេះមិនគាំទ្រការ Share file ទេ។ សូមធ្វើការ Screenshot ដោយដៃ។"); } } else { console.warn('Web Share API not supported.'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Web Share មិនដំណើរការ។'; showCustomAlert("សូម Screenshot", "Browser នេះមិនគាំទ្រ Web Share API ទេ។ សូមធ្វើការ Screenshot វិក័យប័ត្រនេះដោយដៃ រួច Share ទៅ Telegram។"); } shareInvoiceBtn.disabled = false; }, 'image/png'); } catch (error) { console.error("Error generating or sharing invoice image:", error); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Error!'; showCustomAlert("Error", `មានបញ្ហាក្នុងការបង្កើត ឬ Share រូបភាព: ${error.message}`); shareInvoiceBtn.disabled = false; } }
 
     // === Logic ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន ===
