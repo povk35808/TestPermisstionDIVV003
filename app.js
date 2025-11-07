@@ -27,11 +27,10 @@ const firebaseConfig = { apiKey: "AIzaSyDjr_Ha2RxOWEumjEeSdluIW3JmyM76mVk", auth
 const allowedAreaCoords = [ [11.417052769150015, 104.76508285291308], [11.417130005964497, 104.76457396198742], [11.413876386899489, 104.76320488118378], [11.41373800267192, 104.76361527709159] ];
 const LOCATION_FAILURE_MESSAGE = "ការបញ្ជាក់ចូលមកវិញ បរាជ័យ។ \n\nប្រហែលទូរស័ព្ទអ្នកមានបញ្ហា ការកំណត់បើ Live Location ដូច្នោះអ្នកមានជម្រើសមួយទៀតគឺអ្នកអាចទៅបញ្ជាក់ដោយផ្ទាល់នៅការិយាល័យអគារ B ជាមួយក្រុមការងារលោកគ្រូ ដារ៉ូ។";
 
-
 // --- 3. Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. ភ្ជាប់ UI Elements ទាំងអស់
-    UI.assignElements();
+    UI.assignElements(); 
 
     // 2. ភ្ជាប់ Firebase
     try {
@@ -41,21 +40,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         db = getFirestore(app);
         auth = getAuth(app);
 
-        // កំណត់ Collection Paths
+        // 3. កំណត់ Collection Paths
         const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const leavePath = `/artifacts/${canvasAppId}/public/data/leave_requests`;
         const outPath = `/artifacts/${canvasAppId}/public/data/out_requests`;
         
-        // 3. ផ្តួចផ្តើម (Initialize) ម៉ូឌុល Firestore
+        // 4. ផ្តួចផ្តើម (Initialize) ម៉ូឌុល Firestore
         Store.initializeFirestore(db, leavePath, outPath);
 
-        // 4. ភ្ជាប់ Event Listeners ទាំងអស់
+        // 5. ភ្ជាប់ Event Listeners ទាំងអស់
         bindAppEventListeners();
 
-        // 5. ចាប់ផ្តើម Auth Flow
+        // 6. ចាប់ផ្តើម Auth Flow
         setupAuthListener();
 
-        // 6. ព្យាយាម Sign In
+        // 7. ព្យាយាម Sign In
         await signInAnonymously(auth);
         console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in).");
 
@@ -81,12 +80,15 @@ function setupAuthListener() {
                 // 1. ទាញយក Face Models
                 if (typeof faceapi !== 'undefined') {
                     FaceScanner.loadFaceApiModels(
-                        document.getElementById('model-status'), // ត្រូវតែហៅ (call) Element ដោយផ្ទាល់ ព្រោះ UI module មិនទាន់ assign
-                        () => UI.setFaceModelStatus(null, true) // Enable scan button on success
+                        document.getElementById('model-status'), // ត្រូវតែហៅ (call) Element ដោយផ្ទាល់
+                        () => {
+                            // === BUG FIX: ពេល Model load រួច, ពិនិត្យប៊ូតុង Scan ឡើងវិញ ===
+                            UI.updateScanButtonState(selectedUserId); 
+                        }
                     );
                 } else {
                     console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។");
-                    UI.setFaceModelStatus('Error: មិនអាចទាញយក Library ស្កេនមុខបាន', false);
+                    UI.setFaceModelStatus('Error: មិនអាចទាញយក Library ស្កេនមុខបាន');
                 }
 
                 // 2. ពិនិត្យ "Remember Me"
@@ -171,12 +173,8 @@ async function handleFetchUsers() {
         UI.populateUserDropdown(allUsersData, (id) => {
             selectedUserId = id;
             FaceScanner.clearReferenceDescriptor();
-            console.log("Selected User ID:", selectedUserId);
-            // ធ្វើឲ្យប៊ូតុង Scan ដំណើរការ (ប្រសិនបើ Model រួចរាល់)
-            const modelStatusEl = document.getElementById('model-status');
-            if (modelStatusEl && modelStatusEl.textContent === 'Model ស្កេនមុខបានទាញយករួចរាល់') {
-                document.getElementById('scan-face-btn').disabled = (id === null);
-            }
+            // === BUG FIX: ពេល User ជ្រើសរើស, ពិនិត្យប៊ូតុង Scan ឡើងវិញ ===
+            UI.updateScanButtonState(selectedUserId); 
         });
         UI.setLoginLoading(false); // លាក់ Loading, បង្ហាញ Form
     } catch (error) {
@@ -190,7 +188,7 @@ async function handleFetchUsers() {
  */
 function handleLoginSuccess(user) {
     currentUser = user;
-    const rememberMeCheckbox = document.getElementById('remember-me');
+    const rememberMeCheckbox = document.getElementById('remember-me'); // ត្រូវតែ get element នេះដោយផ្ទាល់
     if (rememberMeCheckbox && rememberMeCheckbox.checked) {
         localStorage.setItem('leaveAppUser', JSON.stringify(user));
     } else {
@@ -205,13 +203,15 @@ function handleLoginSuccess(user) {
  */
 function handleLogout() {
     currentUser = null;
+    selectedUserId = null; // សំខាន់
     FaceScanner.clearReferenceDescriptor();
     localStorage.removeItem('leaveAppUser');
-    UI.showLoggedOutState();
+    UI.showLoggedOutState(); // នេះនឹង disable ប៊ូតុង Scan
     if (historyUnsubscribe) historyUnsubscribe();
     if (outHistoryUnsubscribe) outHistoryUnsubscribe();
     historyUnsubscribe = null;
     outHistoryUnsubscribe = null;
+    isEditing = false;
 }
 
 /**
@@ -329,10 +329,10 @@ function handleCancelScan() {
 }
 
 async function handleSubmitLeave() {
-    if (!currentUser) return UI.showCustomAlert("Error", "User غيرត្រឹមត្រូវ");
+    if (!currentUser) return UI.showCustomAlert("Error", "User មិនត្រឹមត្រូវ");
     
     const requestDataUI = UI.getLeaveRequestData();
-    if (!requestDataUI) return; // Error ត្រូវបានបង្ហាញដោយ UI module រួចហើយ
+    if (!requestDataUI) return; 
 
     UI.setLeaveRequestLoading(true);
 
@@ -405,16 +405,15 @@ async function handleSubmitOut() {
 async function handleOpenEdit(requestId, type) {
     isEditing = true;
     UI.clearAllPendingTimers();
-    UI.setEditModalLoading(true); // បង្ហាញ Modal ជាមួយ Loading
+    UI.setEditModalLoading(true); 
     
     try {
         const data = await Store.setRequestStatusToEditing(requestId, type);
-        UI.openEditModal(data, type); // បំពេញទិន្នន័យចូលក្នុង Form
+        UI.openEditModal(data, type); 
     } catch (e) {
         console.error("Error opening edit modal:", e);
         UI.setEditModalError(`Error: ${e.message}`);
         isEditing = false;
-        // (Modal នឹងបិទដោយខ្លួនឯង ឬ បង្ហាញ Error)
     }
 }
 
@@ -427,9 +426,8 @@ async function handleCancelEdit() {
 }
 
 async function handleSubmitEdit() {
-    const editData = UI.getEditModalData(); // យកទិន្នន័យ & ពិនិត្យ Validation ពី UI
-    if (!editData) return; // Error ត្រូវបានបង្ហាញដោយ UI module
-
+    const editData = UI.getEditModalData(); 
+    if (!editData) return; 
     UI.setEditModalLoading(true);
     const requestId = document.getElementById('edit-request-id').value;
     const type = (document.getElementById('edit-modal-title').textContent.includes("ឈប់")) ? 'leave' : 'out';
@@ -442,7 +440,7 @@ async function handleSubmitEdit() {
         UI.setEditModalError(`Error: ${e.message}`);
     } finally {
         UI.setEditModalLoading(false);
-        isEditing = false; // Reset state ទោះជោគជ័យ ឬ បរាជ័យ
+        isEditing = false; 
     }
 }
 
@@ -469,7 +467,7 @@ async function handleOpenReturn(requestId) {
         return;
     }
     
-    currentReturnRequestId = requestId; // រក្សាទុក ID សម្រាប់ពេលក្រោយ
+    currentReturnRequestId = requestId; 
     UI.openReturnScanModal(true);
     UI.setReturnScanStatus('កំពុងព្យាយាមបើកកាមេរ៉ា...');
     
@@ -484,20 +482,20 @@ async function handleOpenReturn(requestId) {
         if (videoEl) videoEl.srcObject = stream;
         UI.setReturnScanStatus('សូមដាក់មុខរបស់អ្នកឲ្យចំរង្វង់');
         
-        FaceScanner.stopAdvancedFaceAnalysis(); // Clear old loops
+        FaceScanner.stopAdvancedFaceAnalysis(); 
 
         FaceScanner.startAdvancedFaceAnalysis(
             videoEl,
             document.getElementById('return-scan-status'),
             document.getElementById('return-scan-debug'),
             referenceDescriptor,
-            handleReturnFaceScanSuccess // ហៅ (call) controller ពេលជោគជ័យ
+            handleReturnFaceScanSuccess 
         );
 
     } catch (error) {
         console.error("Error during return scan process:", error);
         UI.setReturnScanStatus(`Error: ${error.message}`);
-        handleCancelReturn(); // Stop video etc.
+        handleCancelReturn(); 
         setTimeout(() => {
             UI.closeReturnScanModal();
             UI.showCustomAlert("បញ្ហាស្កេនមុខ", `មានបញ្ហា៖\n${error.message}\nសូមប្រាកដថាអ្នកបានអនុញ្ញាតឲ្យប្រើកាមេរ៉ា។`);
@@ -570,11 +568,13 @@ function onLocationError(error) {
 
 async function handleOpenInvoice(requestId, type) {
     if (!db || !requestId || !type) { return UI.showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Missing ID or Type)"); }
-    const collectionPath = (type === 'leave') ? Store.leaveRequestsCollectionPath : Store.outRequestsCollectionPath; // ត្រូវ Access ពី Store
+    
+    // ត្រូវតែយក Paths ពី global state របស់ app.js (ដែលបាន set ពេល init)
+    const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
     if (!collectionPath) { return UI.showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Invalid Collection Path)"); }
 
     try {
-        const docRef = doc(db, collectionPath, requestId); // ប្រើ 'db' ពី global
+        const docRef = doc(db, collectionPath, requestId); 
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) {
             throw new Error("រកមិនឃើញសំណើរនេះទេ។");
