@@ -22,6 +22,13 @@ let selectedLeaveReason = null;
 let selectedOutDuration = null;
 let selectedOutReason = null;
 
+// === START: MODIFICATION (Global Timers & State) ===
+let pendingAlertTimer15s = null;
+let pendingAlertTimer30s = null;
+let toastDisplayTimer = null;
+let isEditing = false; // តាមដាន Edit Modal
+// === END: MODIFICATION ===
+
 // المتغيرات​ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន
 let openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
 
@@ -33,7 +40,7 @@ const allowedAreaCoords = [ [11.417052769150015, 104.76508285291308], [11.417130
 const LOCATION_FAILURE_MESSAGE = "ការបញ្ជាក់ចូលមកវិញ បរាជ័យ។ \n\nប្រហែលទូរស័ព្ទអ្នកមានបញ្ហា ការកំណត់បើ Live Location ដូច្នោះអ្នកមានជម្រើសមួយទៀតគឺអ្នកអាចទៅបញ្ជាក់ដោយផ្ទាល់នៅការិយាល័យអគារ B ជាមួយក្រុមការងារលោកគ្រូ ដារ៉ូ។";
 
 // --- Element References ---
-let userSearchInput, userDropdown, userSearchError, scanFaceBtn, modelStatusEl, faceScanModal, video, scanStatusEl, scanDebugEl, cancelScanBtn, loginFormContainer, inAppWarning, dataLoadingIndicator, rememberMeCheckbox, mainAppContainer, homeUserName, loginPage, bottomNav, userPhotoEl, userNameEl, userIdEl, userGenderEl, userGroupEl, userDepartmentEl, logoutBtn, navButtons, pages, mainContent, requestLeavePage, openLeaveRequestBtn, cancelLeaveRequestBtn, submitLeaveRequestBtn, leaveDurationSearchInput, leaveDurationDropdownEl, leaveSingleDateContainer, leaveDateRangeContainer, leaveSingleDateInput, leaveStartDateInput, leaveEndDateInput, leaveRequestErrorEl, leaveRequestLoadingEl, leaveReasonSearchInput, leaveReasonDropdownEl, historyContainer, historyPlaceholder, criticalErrorDisplay, historyTabLeave, historyTabOut, historyContainerLeave, historyContainerOut, historyPlaceholderLeave, historyPlaceholderOut, historyContent, editModal, editModalTitle, editForm, editRequestId, editDurationSearchInput, editDurationDropdownEl, editSingleDateContainer, editLeaveDateSingle, editDateRangeContainer, editLeaveDateStart, editLeaveDateEnd, editReasonSearchInput, editReasonDropdownEl, editErrorEl, editLoadingEl, submitEditBtn, cancelEditBtn, deleteModal, deleteConfirmBtn, cancelDeleteBtn, deleteRequestId, deleteCollectionType, openOutRequestBtn, requestOutPage, cancelOutRequestBtn, submitOutRequestBtn, outRequestErrorEl, outRequestLoadingEl, outDurationSearchInput, outDurationDropdownEl, outReasonSearchInput, outReasonDropdownEl, outDateInput, returnScanModal, returnVideo, returnScanStatusEl, returnScanDebugEl, cancelReturnScanBtn, customAlertModal, customAlertTitle, customAlertMessage, customAlertOkBtn, customAlertIconWarning, customAlertIconSuccess, invoiceModal, closeInvoiceModalBtn, invoiceModalTitle, invoiceContentWrapper, invoiceContent, invoiceUserName, invoiceUserId, invoiceUserDept, invoiceRequestType, invoiceDuration, invoiceDates, invoiceReason, invoiceStatus, invoiceApprover, invoiceDecisionTime, invoiceRequestId, invoiceReturnInfo, invoiceReturnStatus, invoiceReturnTime, shareInvoiceBtn, invoiceShareStatus;
+let userSearchInput, userDropdown, userSearchError, scanFaceBtn, modelStatusEl, faceScanModal, video, scanStatusEl, scanDebugEl, cancelScanBtn, loginFormContainer, inAppWarning, dataLoadingIndicator, rememberMeCheckbox, mainAppContainer, homeUserName, loginPage, bottomNav, userPhotoEl, userNameEl, userIdEl, userGenderEl, userGroupEl, userDepartmentEl, logoutBtn, navButtons, pages, mainContent, requestLeavePage, openLeaveRequestBtn, cancelLeaveRequestBtn, submitLeaveRequestBtn, leaveDurationSearchInput, leaveDurationDropdownEl, leaveSingleDateContainer, leaveDateRangeContainer, leaveSingleDateInput, leaveStartDateInput, leaveEndDateInput, leaveRequestErrorEl, leaveRequestLoadingEl, leaveReasonSearchInput, leaveReasonDropdownEl, historyContainer, historyPlaceholder, criticalErrorDisplay, historyTabLeave, historyTabOut, historyContainerLeave, historyContainerOut, historyPlaceholderLeave, historyPlaceholderOut, historyContent, editModal, editModalTitle, editForm, editRequestId, editDurationSearchInput, editDurationDropdownEl, editSingleDateContainer, editLeaveDateSingle, editDateRangeContainer, editLeaveDateStart, editLeaveDateEnd, editReasonSearchInput, editReasonDropdownEl, editErrorEl, editLoadingEl, submitEditBtn, cancelEditBtn, deleteModal, deleteConfirmBtn, cancelDeleteBtn, deleteRequestId, deleteCollectionType, openOutRequestBtn, requestOutPage, cancelOutRequestBtn, submitOutRequestBtn, outRequestErrorEl, outRequestLoadingEl, outDurationSearchInput, outDurationDropdownEl, outReasonSearchInput, outReasonDropdownEl, outDateInput, returnScanModal, returnVideo, returnScanStatusEl, returnScanDebugEl, cancelReturnScanBtn, customAlertModal, customAlertTitle, customAlertMessage, customAlertOkBtn, customAlertIconWarning, customAlertIconSuccess, invoiceModal, closeInvoiceModalBtn, invoiceModalTitle, invoiceContentWrapper, invoiceContent, invoiceUserName, invoiceUserId, invoiceUserDept, invoiceRequestType, invoiceDuration, invoiceDates, invoiceReason, invoiceStatus, invoiceApprover, invoiceDecisionTime, invoiceRequestId, invoiceReturnInfo, invoiceReturnStatus, invoiceReturnTime, shareInvoiceBtn, invoiceShareStatus, pendingStatusAlert, pendingStatusMessage; // <-- Added new elements
 
 // --- Duration/Reason Constants ---
 const leaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ", "មួយថ្ងៃកន្លះ", "ពីរថ្ងៃ", "ពីរថ្ងៃកន្លះ", "បីថ្ងៃ", "បីថ្ងៃកន្លះ", "បួនថ្ងៃ", "បួនថ្ងៃកន្លះ", "ប្រាំថ្ងៃ", "ប្រាំថ្ងៃកន្លះ", "ប្រាំមួយថ្ងៃ", "ប្រាំមួយថ្ងៃកន្លះ", "ប្រាំពីរថ្ងៃ"]; const leaveDurationItems = leaveDurations.map(d => ({ text: d, value: d })); const leaveReasons = ["ឈឺក្បាល", "ចុកពោះ", "គ្រុនក្ដៅ", "ផ្ដាសាយ"]; const leaveReasonItems = leaveReasons.map(r => ({ text: r, value: r })); const singleDayLeaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ"]; const outDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយថ្ងៃ"]; const outDurationItems = outDurations.map(d => ({ text: d, value: d })); const outReasons = ["ទៅផ្សារ", "ទៅកាត់សក់", "ទៅភ្នំពេញ", "ទៅពេទ្យ", "ទៅយកអីវ៉ាន់"]; const outReasonItems = outReasons.map(r => ({ text: r, value: r })); const durationToDaysMap = { "មួយថ្ងៃកន្លះ": 1.5, "ពីរថ្ងៃ": 2, "ពីរថ្ងៃកន្លះ": 2.5, "បីថ្ងៃ": 3, "បីថ្ងៃកន្លះ": 3.5, "បួនថ្ងៃ": 4, "បួនថ្ងៃកន្លះ": 4.5, "ប្រាំថ្ងៃ": 5, "ប្រាំថ្ងៃកន្លះ": 5.5, "ប្រាំមួយថ្ងៃ": 6, "ប្រាំមួយថ្ងៃកន្លះ": 6.5, "ប្រាំពីរថ្ងៃ": 7 };
@@ -41,12 +48,12 @@ const leaveDurations = ["មួយព្រឹក", "មួយរសៀល", "�
 // --- Date Helper Functions ---
 function getTodayString(format = 'yyyy-mm-dd') { const today = new Date(); const yyyy = today.getFullYear(); const mm = String(today.getMonth() + 1).padStart(2, '0'); const dd = String(today.getDate()).padStart(2, '0'); if (format === 'dd/mm/yyyy') return `${dd}/${mm}/${yyyy}`; return `${yyyy}-${mm}-${dd}`; }
 function formatDbDateToInput(dbDate) { if (!dbDate || dbDate.split('/').length !== 3) return getTodayString(); const parts = dbDate.split('/'); return `${parts[2]}-${parts[1]}-${parts[0]}`; }
-function formatInputDateToDb(inputDate) { if (!inputDate || inputDate.split('-').length !== 3) return getTodayString('dd/mm/yyyy'); const parts = inputDate.split('-'); return `${parts[2]}/${parts[1]}/${parts[0]}`; } // Fix: ត្រូវជា / មិនមែន -
+function formatInputDateToDb(inputDate) { if (!inputDate || inputDate.split('-').length !== 3) return getTodayString('dd/mm/yyyy'); const parts = inputDate.split('-'); return `${parts[2]}/${parts[1]}/${parts[0]}`; }
 function addDays(startDateStr, days) { try { const date = new Date(startDateStr); if (isNaN(date.getTime())) return getTodayString(); date.setDate(date.getDate() + Math.ceil(days) - 1); const yyyy = date.getFullYear(); const mm = String(date.getMonth() + 1).padStart(2, '0'); const dd = String(date.getDate()).padStart(2, '0'); return `${yyyy}-${mm}-${dd}`; } catch (e) { console.error("Error in addDays:", e); return getTodayString(); } }
 function formatFirestoreTimestamp(timestamp, format = 'HH:mm dd/MM/yyyy') { let date; if (!timestamp) return ""; if (timestamp instanceof Date) date = timestamp; else if (timestamp.toDate) date = timestamp.toDate(); else if (typeof timestamp === 'string') { date = new Date(timestamp); if (isNaN(date.getTime())) return ""; } else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000); else return ""; const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); if (format === 'HH:mm' || format === 'time') return `${hours}:${minutes}`; if (format === 'dd/MM/yyyy' || format === 'date') return `${day}/${month}/${year}`; return `${hours}:${minutes} ${day}/${month}/${year}`; }
 function parseReturnedAt_(returnedAtString) { if (!returnedAtString || typeof returnedAtString !== 'string') return { date: "", time: "" }; const parts = returnedAtString.split(' '); if (parts.length === 2) return { time: parts[0], date: parts[1] }; return { date: returnedAtString, time: "" }; }
 function formatDateToDdMmmYyyy(dateString) {
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     let date;
     if (dateString.includes('-') && dateString.split('-').length === 3) { // yyyy-mm-dd
         const parts = dateString.split('-');
@@ -82,6 +89,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Assign Element References ---
     userSearchInput = document.getElementById('user-search'); userDropdown = document.getElementById('user-dropdown'); userSearchError = document.getElementById('user-search-error'); scanFaceBtn = document.getElementById('scan-face-btn'); modelStatusEl = document.getElementById('model-status'); faceScanModal = document.getElementById('face-scan-modal'); video = document.getElementById('video'); scanStatusEl = document.getElementById('scan-status'); scanDebugEl = document.getElementById('scan-debug'); cancelScanBtn = document.getElementById('cancel-scan-btn'); loginFormContainer = document.getElementById('login-form-container'); inAppWarning = document.getElementById('in-app-warning'); dataLoadingIndicator = document.getElementById('data-loading-indicator'); rememberMeCheckbox = document.getElementById('remember-me'); mainAppContainer = document.getElementById('main-app-container'); homeUserName = document.getElementById('home-user-name'); loginPage = document.getElementById('page-login'); bottomNav = document.getElementById('bottom-navigation'); userPhotoEl = document.getElementById('user-photo'); userNameEl = document.getElementById('user-name'); userIdEl = document.getElementById('user-id'); userGenderEl = document.getElementById('user-gender'); userGroupEl = document.getElementById('user-group'); userDepartmentEl = document.getElementById('user-department'); logoutBtn = document.getElementById('logout-btn'); navButtons = document.querySelectorAll('.nav-btn');
     mainContent = document.getElementById('main-content'); criticalErrorDisplay = document.getElementById('critical-error-display'); requestLeavePage = document.getElementById('page-request-leave'); openLeaveRequestBtn = document.getElementById('open-leave-request-btn'); cancelLeaveRequestBtn = document.getElementById('cancel-leave-request-btn'); submitLeaveRequestBtn = document.getElementById('submit-leave-request-btn'); leaveDurationSearchInput = document.getElementById('leave-duration-search'); leaveDurationDropdownEl = document.getElementById('leave-duration-dropdown'); leaveSingleDateContainer = document.getElementById('leave-single-date-container'); leaveDateRangeContainer = document.getElementById('leave-date-range-container'); leaveSingleDateInput = document.getElementById('leave-date-single'); leaveStartDateInput = document.getElementById('leave-date-start'); leaveEndDateInput = document.getElementById('leave-date-end'); leaveRequestErrorEl = document.getElementById('leave-request-error'); leaveRequestLoadingEl = document.getElementById('leave-request-loading'); leaveReasonSearchInput = document.getElementById('leave-reason-search'); leaveReasonDropdownEl = document.getElementById('leave-reason-dropdown'); historyContainer = document.getElementById('history-container'); historyPlaceholder = document.getElementById('history-placeholder'); historyTabLeave = document.getElementById('history-tab-leave'); historyTabOut = document.getElementById('history-tab-out'); historyContainerLeave = document.getElementById('history-container-leave'); historyContainerOut = document.getElementById('history-container-out'); historyPlaceholderLeave = document.getElementById('history-placeholder-leave'); historyPlaceholderOut = document.getElementById('history-placeholder-out'); historyContent = document.getElementById('history-content'); editModal = document.getElementById('edit-modal'); editModalTitle = document.getElementById('edit-modal-title'); editForm = document.getElementById('edit-form'); editRequestId = document.getElementById('edit-request-id'); editDurationSearchInput = document.getElementById('edit-duration-search'); editDurationDropdownEl = document.getElementById('edit-duration-dropdown'); editSingleDateContainer = document.getElementById('edit-single-date-container'); editLeaveDateSingle = document.getElementById('edit-leave-date-single'); editDateRangeContainer = document.getElementById('edit-date-range-container'); editLeaveDateStart = document.getElementById('edit-leave-date-start'); editLeaveDateEnd = document.getElementById('edit-leave-date-end'); editReasonSearchInput = document.getElementById('edit-reason-search'); editReasonDropdownEl = document.getElementById('edit-reason-dropdown'); editErrorEl = document.getElementById('edit-error'); editLoadingEl = document.getElementById('edit-loading'); submitEditBtn = document.getElementById('submit-edit-btn'); cancelEditBtn = document.getElementById('cancel-edit-btn'); deleteModal = document.getElementById('delete-modal'); deleteConfirmBtn = document.getElementById('delete-confirm-btn'); cancelDeleteBtn = document.getElementById('cancel-delete-btn'); deleteRequestId = document.getElementById('delete-request-id'); deleteCollectionType = document.getElementById('delete-collection-type'); openOutRequestBtn = document.getElementById('open-out-request-btn'); requestOutPage = document.getElementById('page-request-out'); cancelOutRequestBtn = document.getElementById('cancel-out-request-btn'); submitOutRequestBtn = document.getElementById('submit-out-request-btn'); outRequestErrorEl = document.getElementById('out-request-error'); outRequestLoadingEl = document.getElementById('out-request-loading'); outDurationSearchInput = document.getElementById('out-duration-search'); outDurationDropdownEl = document.getElementById('out-duration-dropdown'); outReasonSearchInput = document.getElementById('out-reason-search'); outReasonDropdownEl = document.getElementById('out-reason-dropdown'); outDateInput = document.getElementById('out-date-single'); returnScanModal = document.getElementById('return-scan-modal'); returnVideo = document.getElementById('return-video'); returnScanStatusEl = document.getElementById('return-scan-status'); returnScanDebugEl = document.getElementById('return-scan-debug'); cancelReturnScanBtn = document.getElementById('cancel-return-scan-btn'); customAlertModal = document.getElementById('custom-alert-modal'); customAlertTitle = document.getElementById('custom-alert-title'); customAlertMessage = document.getElementById('custom-alert-message'); customAlertOkBtn = document.getElementById('custom-alert-ok-btn'); customAlertIconWarning = document.getElementById('custom-alert-icon-warning'); customAlertIconSuccess = document.getElementById('custom-alert-icon-success'); invoiceModal = document.getElementById('invoice-modal'); closeInvoiceModalBtn = document.getElementById('close-invoice-modal-btn'); invoiceModalTitle = document.getElementById('invoice-modal-title'); invoiceContentWrapper = document.getElementById('invoice-content-wrapper'); invoiceContent = document.getElementById('invoice-content'); invoiceUserName = document.getElementById('invoice-user-name'); invoiceUserId = document.getElementById('invoice-user-id'); invoiceUserDept = document.getElementById('invoice-user-dept'); invoiceRequestType = document.getElementById('invoice-request-type'); invoiceDuration = document.getElementById('invoice-duration'); invoiceDates = document.getElementById('invoice-dates'); invoiceReason = document.getElementById('invoice-reason'); invoiceStatus = document.getElementById('invoice-status'); invoiceApprover = document.getElementById('invoice-approver'); invoiceDecisionTime = document.getElementById('invoice-decision-time'); invoiceRequestId = document.getElementById('invoice-request-id'); invoiceReturnInfo = document.getElementById('invoice-return-info'); invoiceReturnStatus = document.getElementById('invoice-return-status'); invoiceReturnTime = document.getElementById('invoice-return-time'); shareInvoiceBtn = document.getElementById('share-invoice-btn'); invoiceShareStatus = document.getElementById('invoice-share-status');
+    // === START: MODIFICATION (Add new element refs) ===
+    pendingStatusAlert = document.getElementById('pending-status-alert');
+    pendingStatusMessage = document.getElementById('pending-status-message');
+    // === END: MODIFICATION ===
     openDailyAttendanceBtn = document.getElementById('open-daily-attendance-btn');
     attendancePage = document.getElementById('page-daily-attendance');
     closeAttendancePageBtn = document.getElementById('close-attendance-page-btn');
@@ -96,21 +107,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (historyContainerOut) historyContainerOut.addEventListener('touchstart', handleHistoryTap, { passive: false });
 
     // --- Setup Dropdowns AFTER elements are available ---
-    
-    setupSearchableDropdown('user-search', 'user-dropdown', [], (id) => { // Initially empty, populated by fetchUsers
+    setupSearchableDropdown('user-search', 'user-dropdown', [], (id) => { 
         selectedUserId = id;
         FaceScanner.clearReferenceDescriptor(); 
         console.log("Reference Descriptor Cleared on User Select.");
         if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់');
         console.log("Selected User ID:", selectedUserId);
     });
-
     setupSearchableDropdown('leave-duration-search', 'leave-duration-dropdown', leaveDurationItems, (duration) => { selectedLeaveDuration = duration; updateLeaveDateFields(duration); }, false);
     setupSearchableDropdown('leave-reason-search', 'leave-reason-dropdown', leaveReasonItems, (reason) => { selectedLeaveReason = reason; }, true);
     setupSearchableDropdown('out-duration-search', 'out-duration-dropdown', outDurationItems, (duration) => { selectedOutDuration = duration; }, false);
     setupSearchableDropdown('out-reason-search', 'out-reason-dropdown', outReasonItems, (reason) => { selectedOutReason = reason; }, true);
-    
-    // ទុក Dropdown ទាំងនេះឲ្យនៅទទេ (Empty) - យើងនឹង Populate វានៅក្នុង openEditModal
     setupSearchableDropdown('edit-duration-search', 'edit-duration-dropdown', [], () => {}, false); 
     setupSearchableDropdown('edit-reason-search', 'edit-reason-dropdown', [], () => {}, true);
 
@@ -160,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const filteredItems = items.filter(item => item.text && item.text.toLowerCase().includes(filterLower));
 
             if (filteredItems.length === 0) {
-                if (filterLower !== '' || (filterLower === '' && inputId !== 'user-search')) { // Show for empty filter on non-user dropdowns
+                if (filterLower !== '' || (filterLower === '' && inputId !== 'user-search')) {
                     const itemEl = document.createElement('div');
                     itemEl.textContent = 'រកមិនឃើញ...';
                     itemEl.className = 'px-4 py-2 text-gray-500 text-sm italic';
@@ -203,14 +210,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const currentValue = searchInput.value;
             populateDropdown(currentValue);
             const exactMatch = items.find(item => item.text === currentValue);
-            // === MODIFICATION: Call onSelectCallback only on input, not just for matching ===
             const selection = exactMatch ? exactMatch.value : (allowCustom ? currentValue : null);
             if (onSelectCallback) onSelectCallback(selection);
         });
 
         searchInput.addEventListener('focus', () => {
             populateDropdown(searchInput.value);
-A       });
+        });
 
         searchInput.addEventListener('blur', () => {
             setTimeout(() => {
@@ -298,9 +304,27 @@ A       });
 
     // --- App Navigation & State Logic ---
     function loginUser(userIdToLogin) { const user = allUsersData.find(u => u.id === userIdToLogin); if (!user) { showCustomAlert("Login Error", "មានបញ្ហា Login: រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់"); return; } if (rememberMeCheckbox && rememberMeCheckbox.checked) { localStorage.setItem('leaveAppUser', JSON.stringify(user)); } else { localStorage.removeItem('leaveAppUser'); } showLoggedInState(user); }
-    function logout() { currentUser = null; 
+    function logout() { 
+        currentUser = null; 
         FaceScanner.clearReferenceDescriptor(); 
-        localStorage.removeItem('leaveAppUser'); if (loginPage) loginPage.classList.remove('hidden'); if (mainAppContainer) mainAppContainer.classList.add('hidden'); if (userPhotoEl) userPhotoEl.src = 'https://placehold.co/100x100/e2e8f0/64748b?text=User'; if (userNameEl) userNameEl.textContent = '...'; if (userIdEl) userIdEl.textContent = '...'; if (userSearchInput) userSearchInput.value = ''; selectedUserId = null; if (scanFaceBtn) scanFaceBtn.disabled = true; if (historyUnsubscribe) historyUnsubscribe(); if (outHistoryUnsubscribe) outHistoryUnsubscribe(); historyUnsubscribe = null; outHistoryUnsubscribe = null; signInAnonymously(auth).catch(err => console.error("Error signing in anonymously after logout:", err)); }
+        localStorage.removeItem('leaveAppUser'); 
+        if (loginPage) loginPage.classList.remove('hidden'); 
+        if (mainAppContainer) mainAppContainer.classList.add('hidden'); 
+        if (userPhotoEl) userPhotoEl.src = 'https://placehold.co/100x100/e2e8f0/64748b?text=User'; 
+        if (userNameEl) userNameEl.textContent = '...'; 
+        if (userIdEl) userIdEl.textContent = '...'; 
+        if (userSearchInput) userSearchInput.value = ''; 
+        selectedUserId = null; 
+        if (scanFaceBtn) scanFaceBtn.disabled = true; 
+        if (historyUnsubscribe) historyUnsubscribe(); 
+        if (outHistoryUnsubscribe) outHistoryUnsubscribe(); 
+        historyUnsubscribe = null; 
+        outHistoryUnsubscribe = null;
+        // === START: MODIFICATION (Clear timers on logout) ===
+        clearAllPendingTimers();
+        // === END: MODIFICATION ===
+        signInAnonymously(auth).catch(err => console.error("Error signing in anonymously after logout:", err)); 
+    }
     function showLoggedInState(user) { currentUser = user; 
         FaceScanner.clearReferenceDescriptor(); 
         populateAccountPage(user); if (homeUserName) homeUserName.textContent = user.name || '...'; if (loginPage) loginPage.classList.add('hidden'); if (mainAppContainer) mainAppContainer.classList.remove('hidden'); if (criticalErrorDisplay) criticalErrorDisplay.classList.add('hidden'); navigateTo('page-home'); setupHistoryListeners(user.id); }
@@ -344,12 +368,50 @@ A       });
     function showCustomAlert(title, message, type = 'warning') { if (!customAlertModal) return; if (customAlertTitle) customAlertTitle.textContent = title; if (customAlertMessage) customAlertMessage.textContent = message; if (type === 'success') { if (customAlertIconSuccess) customAlertIconSuccess.classList.remove('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.add('hidden'); } else { if (customAlertIconSuccess) customAlertIconSuccess.classList.add('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.remove('hidden'); } customAlertModal.classList.remove('hidden'); }
     function hideCustomAlert() { if (customAlertModal) customAlertModal.classList.add('hidden'); }
 
+    // === START: MODIFICATION (New Helper Functions for Pending Alert) ===
+    function showPendingAlert(message) {
+        if (!pendingStatusAlert || !pendingStatusMessage) return;
+        
+        // Clear 3-second hide timer (if any)
+        if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
+
+        pendingStatusMessage.textContent = message;
+        pendingStatusAlert.classList.remove('hidden');
+
+        // Auto-hide after 3 seconds
+        toastDisplayTimer = setTimeout(() => {
+            hidePendingAlert();
+        }, 3000); // 3-second display time
+    }
+
+    function hidePendingAlert() {
+        if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
+        toastDisplayTimer = null;
+        if (pendingStatusAlert) pendingStatusAlert.classList.add('hidden');
+    }
+
+    function clearAllPendingTimers() {
+        if (pendingAlertTimer15s) clearTimeout(pendingAlertTimer15s);
+        if (pendingAlertTimer30s) clearTimeout(pendingAlertTimer30s);
+        pendingAlertTimer15s = null;
+        pendingAlertTimer30s = null;
+        hidePendingAlert(); // Also hide any visible toast
+    }
+    // === END: MODIFICATION ===
+
+
     // --- History Page Logic (Real-time) ---
     function setupHistoryListeners(currentEmployeeId) { console.log("Setting up history listeners for employee ID:", currentEmployeeId); if (historyUnsubscribe) historyUnsubscribe(); if (outHistoryUnsubscribe) outHistoryUnsubscribe(); if (!db || !currentEmployeeId) return console.error("Firestore DB not initialized or Employee ID not set."); const now = new Date(); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); const startTimestamp = Timestamp.fromDate(startOfMonth); const endTimestamp = Timestamp.fromDate(endOfMonth); try { const leaveQuery = query(collection(db, leaveRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Leave Requests for current month..."); historyUnsubscribe = onSnapshot(leaveQuery, (snapshot) => { console.log(`Received LEAVE snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerLeave, historyPlaceholderLeave, 'leave'); }, (error) => { console.error("Error listening to LEAVE history:", error); if (historyPlaceholderLeave) { historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create LEAVE history query:", e); if (historyPlaceholderLeave) historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } try { const outQuery = query(collection(db, outRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Out Requests for current month..."); outHistoryUnsubscribe = onSnapshot(outQuery, (snapshot) => { console.log(`Received OUT snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerOut, historyPlaceholderOut, 'out'); }, (error) => { console.error("Error listening to OUT history:", error); if (historyPlaceholderOut) { historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create OUT history query:", e); if (historyPlaceholderOut) historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }
     function getSortPriority(status) { switch(status) { case 'pending': return 1; case 'editing': return 2; case 'approved': return 3; case 'rejected': return 4; default: return 5; } }
+    
+    // === START: MODIFICATION (renderHistoryList with Timers) ===
     function renderHistoryList(snapshot, container, placeholder, type) {
         if (!container || !placeholder) return;
         const requests = []; 
+
+        // === MODIFICATION: Clear all timers on any snapshot update ===
+        clearAllPendingTimers();
+
         if (snapshot.empty) {
             placeholder.classList.remove('hidden');
             container.innerHTML = '';
@@ -365,6 +427,56 @@ A       });
                 const timeB = b.requestedAt?.toMillis() ?? 0;
                 return timeB - timeA;
             });
+
+            // === START: New Pending Alert Logic ===
+            if (requests.length > 0) {
+                const topRequest = requests[0];
+                
+                // Only run timers if the top request is 'pending' (NOT 'editing')
+                if (topRequest.status === 'pending') {
+                    
+                    const requestedAtTime = topRequest.requestedAt?.toMillis();
+                    if (requestedAtTime) {
+                        const now = Date.now();
+                        const pendingDurationMs = now - requestedAtTime; // Time in milliseconds
+                        const pendingDurationSec = pendingDurationMs / 1000;
+
+                        console.log(`Top request is pending for ${pendingDurationSec.toFixed(0)} seconds.`);
+
+                        // Schedule the 15s timer IF it hasn't fired yet
+                        if (pendingDurationSec < 15) {
+                            const timeTo15s = (15 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 15s timer in ${timeTo15s.toFixed(0)}ms`);
+                            pendingAlertTimer15s = setTimeout(() => {
+                                // Check *again* when the timer fires
+                                const historyPage = document.getElementById('page-history');
+                                if (isEditing) return console.log("15s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("15s Timer: Canceled (Not on history page).");
+                                
+                                showPendingAlert("សំណើររបស់អ្នកមានការយឺតយ៉ាវបន្តិចប្រហែល Admin ជាប់រវល់ការងារច្រើន ឬសំណើររបស់អ្នកមានបញ្ហាខុសលក្ខខ័ណ្ឌអ្វីមួយ!");
+                            }, timeTo15s);
+                        }
+
+                        // Schedule the 30s timer IF it hasn't fired yet
+                        if (pendingDurationSec < 30) {
+                            const timeTo30s = (30 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 30s timer in ${timeTo30s.toFixed(0)}ms`);
+                            pendingAlertTimer30s = setTimeout(() => {
+                                // Check *again* when the timer fires
+                                const historyPage = document.getElementById('page-history');
+                                if (isEditing) return console.log("30s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("30s Timer: Canceled (Not on history page).");
+
+                                showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
+                                // TODO: Maybe send a reminder notification?
+                                // sendTelegramNotification(`🔔 REMINDER: Request ${topRequest.requestId} is still pending!`);
+                            }, timeTo30s);
+                        }
+                    }
+                }
+            }
+            // === END: New Pending Alert Logic ===
+
             requests.forEach(request => container.innerHTML += renderHistoryCard(request, type));
         }
 
@@ -383,6 +495,8 @@ A       });
             updateOutButtonState(hasActiveOut);
         }
     }
+    // === END: MODIFICATION (renderHistoryList with Timers) ===
+
     function renderHistoryCard(request, type) { if (!request || !request.requestId) return ''; let statusColor, statusText, decisionInfo = ''; switch(request.status) { case 'approved': statusColor = 'bg-green-100 text-green-800'; statusText = 'បានយល់ព្រម'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-green-600 mt-1">នៅម៉ោង: ${formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'rejected': statusColor = 'bg-red-100 text-red-800'; statusText = 'បានបដិសធ'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-red-600 mt-1">នៅម៉ោង: ${formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'editing': statusColor = 'bg-blue-100 text-blue-800'; statusText = 'កំពុងកែសម្រួល'; break; default: statusColor = 'bg-yellow-100 text-yellow-800'; statusText = 'កំពុងរង់ចាំ'; } const dateString = (request.startDate === request.endDate) ? request.startDate : (request.startDate && request.endDate ? `${request.startDate} ដល់ ${request.endDate}` : 'N/A'); const showActions = (request.status === 'pending' || request.status === 'editing'); let returnInfo = ''; let returnButton = ''; if (type === 'out') { if (request.returnStatus === 'បានចូលមកវិញ') returnInfo = `<p class="text-sm font-semibold text-green-700 mt-2">✔️ បានចូលមកវិញ: ${request.returnedAt || ''}</p>`; else if (request.status === 'approved') returnButton = `<button data-id="${request.requestId}" class="return-btn w-full mt-3 py-2 px-3 bg-green-600 text-white rounded-lg font-semibold text-sm shadow-sm hover:bg-green-700">បញ្ជាក់ចូលមកវិញ</button>`; } let invoiceButton = ''; if (request.status === 'approved') invoiceButton = `<button data-id="${request.requestId}" data-type="${type}" class="invoice-btn mt-3 py-1.5 px-3 bg-indigo-100 text-indigo-700 rounded-md font-semibold text-xs shadow-sm hover:bg-indigo-200 w-full sm:w-auto">ពិនិត្យមើលវិក័យប័ត្រ</button>`; return `<div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-4"><div class="flex justify-between items-start"><span class="font-semibold text-gray-800">${request.duration || 'N/A'}</span><span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}">${statusText}</span></div><p class="text-sm text-gray-600 mt-1">${dateString}</p><p class="text-sm text-gray-500 mt-1"><b>មូលហេតុ:</b> ${request.reason || 'មិនបានបញ្ជាក់'}</p>${decisionInfo}${returnInfo}<div class="mt-3 pt-3 border-t border-gray-100"><div class="flex flex-wrap justify-between items-center gap-2"><p class="text-xs text-gray-400">ID: ${request.requestId}</p>${showActions ? `<div class="flex space-x-2"><button data-id="${request.requestId}" data-type="${type}" class="edit-btn p-1 text-blue-600 hover:text-blue-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button><button data-id="${request.requestId}" data-type="${type}" class="delete-btn p-1 text-red-600 hover:text-red-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div>` : ''}${invoiceButton}</div>${returnButton}</div></div>`; }
     function updateLeaveButtonState(isDisabled) {
         if (!openLeaveRequestBtn) return; 
@@ -422,54 +536,43 @@ A       });
             console.error("Date input elements not found for Edit form.");
             return;
         }
-
-        // សម្រាប់ 'out' (ចេញក្រៅ) វាតែងតែជាថ្ងៃតែមួយ
         if (type === 'out') {
             editSingleDateContainer.classList.remove('hidden');
             editDateRangeContainer.classList.add('hidden');
-            // editLeaveDateSingle.value ត្រូវបាន populate រួចហើយ (ជា dd-Mmm-yyyy) ហើយវាមិនប្តូរទេ
             return;
         }
-
-        // សម្រាប់ 'leave' (ឈប់សម្រាក)
         if (!duration) {
             editSingleDateContainer.classList.add('hidden');
             editDateRangeContainer.classList.add('hidden');
             return;
         }
-
         if (singleDayLeaveDurations.includes(duration)) {
-            // បើប្តូរទៅជា "មួយថ្ងៃ" ឬ "មួយព្រឹក"
             editSingleDateContainer.classList.remove('hidden');
             editDateRangeContainer.classList.add('hidden');
-            // យក startDate ពី Date Range (format yyyy-mm-dd) មកប្តូរជា dd-Mmm-yyyy
             if (editLeaveDateStart.value) {
                 editLeaveDateSingle.value = formatDateToDdMmmYyyy(editLeaveDateStart.value);
             }
-            // (else: editLeaveDateSingle.value មានតម្លៃ dd-Mmm-yyyy ស្រាប់)
         } else {
-            // បើប្តូរទៅជា "ពីរថ្ងៃ" ឬច្រើនជាង
             editSingleDateContainer.classList.add('hidden');
             editDateRangeContainer.classList.remove('hidden');
-            
             let startDateInputVal;
             if (editLeaveDateStart.value) {
-                // តម្លៃ yyyy-mm-dd មានស្រាប់
                 startDateInputVal = editLeaveDateStart.value;
             } else {
-                // ប្តូរពី Single Date (dd-Mmm-yyyy) ទៅ yyyy-mm-dd
                 startDateInputVal = parseDdMmmYyyyToInputFormat(editLeaveDateSingle.value);
-                editLeaveDateStart.value = startDateInputVal; // Update លើ input វិញ
+                editLeaveDateStart.value = startDateInputVal; 
             }
-
             const days = durationToDaysMap[duration] ?? 1;
             const endDateValue = addDays(startDateInputVal, days);
-            editLeaveDateEnd.value = endDateValue; // Update ថ្ងៃបញ្ចប់ (ដែល disable)
+            editLeaveDateEnd.value = endDateValue; 
         }
     }
 
     // --- Edit Modal Logic (MODIFIED) ---
     async function openEditModal(requestId, type) { 
+        isEditing = true; // === MODIFICATION: Set editing state ===
+        clearAllPendingTimers(); // === MODIFICATION: Stop timers when editing ===
+
         if (!db || !requestId || !type) return; 
         const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
         if (!collectionPath) return; 
@@ -492,17 +595,14 @@ A       });
             if (editReasonSearchInput) editReasonSearchInput.value = data.reason || ''; 
             if (editDurationSearchInput) editDurationSearchInput.value = data.duration; 
 
-            // === MODIFICATION: បន្ថែម onSelectCallback ទៅ setupSearchableDropdown ===
             const currentDurationItems = (type === 'leave' ? leaveDurationItems : outDurationItems);
             const currentReasonItems = (type === 'leave' ? leaveReasonItems : outReasonItems);
             
-            // ហៅ (call) setupSearchableDropdown ម្តងទៀត ដើម្បី update options និង callback
             setupSearchableDropdown(
                 'edit-duration-search', 
                 'edit-duration-dropdown', 
                 currentDurationItems, 
                 (duration) => { 
-                    // នេះគឺជា onSelectCallback ថ្មី
                     updateEditDateFields(duration, type);
                 }, 
                 false
@@ -511,10 +611,9 @@ A       });
                 'edit-reason-search', 
                 'edit-reason-dropdown', 
                 currentReasonItems, 
-                () => {}, // Reason មិនប៉ះពាល់ដល់ Date
+                () => {},
                 true
             );
-            // === END MODIFICATION ===
 
             if (type === 'leave') { 
                 if (singleDayLeaveDurations.includes(data.duration)) { 
@@ -541,21 +640,34 @@ A       });
                 editErrorEl.textContent = `Error: ${e.message}`; 
                 editErrorEl.classList.remove('hidden'); 
             } 
+            isEditing = false; // === MODIFICATION: Reset state on error ===
         } 
     }
-    if (cancelEditBtn) cancelEditBtn.addEventListener('click', async () => { const requestId = editRequestId.value; const type = (editModalTitle.textContent.includes("ឈប់")) ? 'leave' : 'out'; const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; if (requestId && collectionPath) { try { const requestRef = doc(db, collectionPath, requestId); await updateDoc(requestRef, { status: 'pending' }); console.log("Edit cancelled, status reverted to 'pending'"); } catch (e) { console.error("Error reverting status on edit cancel:", e); } } if (editModal) editModal.classList.add('hidden'); });
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', async () => { 
+        const requestId = editRequestId.value; 
+        const type = (editModalTitle.textContent.includes("ឈប់")) ? 'leave' : 'out'; 
+        const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
+        if (requestId && collectionPath) { 
+            try { 
+                const requestRef = doc(db, collectionPath, requestId); 
+                await updateDoc(requestRef, { status: 'pending' }); 
+                console.log("Edit cancelled, status reverted to 'pending'"); 
+            } catch (e) { 
+                console.error("Error reverting status on edit cancel:", e); 
+            } 
+        } 
+        if (editModal) editModal.classList.add('hidden'); 
+        isEditing = false; // === MODIFICATION: Reset editing state ===
+    });
 
-    // --- MODIFICATION: Update ប៊ូតុង Submit ឲ្យរក្សាទុក Duration និង Dates ថ្មី ---
     if (submitEditBtn) submitEditBtn.addEventListener('click', async () => { 
         const requestId = editRequestId.value; 
         const type = (editModalTitle.textContent.includes("ឈប់")) ? 'leave' : 'out'; 
         const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
         
-        // 1. យកតម្លៃថ្មី
         const newDuration = (type === 'leave' ? leaveDurations : outDurations).includes(editDurationSearchInput.value) ? editDurationSearchInput.value : null;
         const newReason = editReasonSearchInput.value; 
 
-        // 2. ពិនិត្យ Validation
         if (!newDuration) {
             if(editErrorEl) { editErrorEl.textContent = "សូមជ្រើសរើស \"រយៈពេល\" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។"; editErrorEl.classList.remove('hidden'); } 
             return;
@@ -569,27 +681,23 @@ A       });
         if (editErrorEl) editErrorEl.classList.add('hidden'); 
 
         try { 
-            // 3. គណនាកាលបរិច្ឆេទថ្មី (ជា Format dd-Mmm-yyyy សម្រាប់ Firestore)
             const isSingleDay = (type === 'out') || singleDayLeaveDurations.includes(newDuration);
             let finalStartDate, finalEndDate, dateStringForTelegram;
 
             if (isSingleDay) {
-                // យកតម្លៃពី 'editLeaveDateSingle' (dd-Mmm-yyyy) ឬ ប្តូរពី 'editLeaveDateStart' (yyyy-mm-dd)
-                let singleDateVal = editLeaveDateSingle.value; // dd-Mmm-yyyy
-                if (!singleDateVal || singleDateVal.includes('-')) { // Check if it's yyyy-mm-dd
-                    singleDateVal = formatDateToDdMmmYyyy(editLeaveDateStart.value); // Convert yyyy-mm-dd to dd-Mmm-yyyy
+                let singleDateVal = editLeaveDateSingle.value; 
+                if (!singleDateVal || singleDateVal.includes('-')) { 
+                    singleDateVal = formatDateToDdMmmYyyy(editLeaveDateStart.value); 
                 }
                 finalStartDate = singleDateVal;
                 finalEndDate = singleDateVal;
-                dateStringForTelegram = finalStartDate; // dd-Mmm-yyyy
+                dateStringForTelegram = finalStartDate; 
             } else {
-                // យកតម្លៃពី Date Range (yyyy-mm-dd)
-                finalStartDate = formatDateToDdMmmYyyy(editLeaveDateStart.value); // Convert to dd-Mmm-yyyy
-                finalEndDate = formatDateToDdMmmYyyy(editLeaveDateEnd.value); // Convert to dd-Mmm-yyyy
-                dateStringForTelegram = `ពី ${formatInputDateToDb(editLeaveDateStart.value)} ដល់ ${formatInputDateToDb(editLeaveDateEnd.value)}`; // dd/mm/yyyy
+                finalStartDate = formatDateToDdMmmYyyy(editLeaveDateStart.value); 
+                finalEndDate = formatDateToDdMmmYyyy(editLeaveDateEnd.value); 
+                dateStringForTelegram = `ពី ${formatInputDateToDb(editLeaveDateStart.value)} ដល់ ${formatInputDateToDb(editLeaveDateEnd.value)}`; 
             }
 
-            // 4. Update ទៅកាន់ Firestore
             const requestRef = doc(db, collectionPath, requestId); 
             await updateDoc(requestRef, { 
                 duration: newDuration,
@@ -601,7 +709,6 @@ A       });
             }); 
             console.log("Edit submitted, status set to 'pending' with new duration/dates"); 
             
-            // 5. ផ្ញើសារទៅ Telegram
             let message = `<b>🔔 សំណើត្រូវបានកែសម្រួល 🔔</b>\n\n`; 
             message += `<b>ID:</b> \`${requestId}\`\n`; 
             message += `<b>រយៈពេលថ្មី:</b> ${newDuration}\n`;
@@ -619,7 +726,9 @@ A       });
                 editErrorEl.textContent = `Error: ${e.message}`; 
                 editErrorEl.classList.remove('hidden'); 
             } 
-        } 
+        } finally {
+            isEditing = false; // === MODIFICATION: Reset editing state ===
+        }
     });
 
     // --- Delete Modal Logic ---
