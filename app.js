@@ -1,609 +1,835 @@
-// --- File: app.js ---
-// នេះគឺជា Controller ស្នូល (Main) សម្រាប់កម្មវិធីទាំងមូល
-
-// --- 1. Imports ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, getDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-import * as UI from './app-ui.js';
-import * as Store from './app-firestore.js';
+// នាំចូល (Import) មុខងារទាំងអស់ពី Module ថ្មី
 import * as FaceScanner from './face-scanner.js';
-import * as API from './api.js';
-import * as Utils from './utils.js'; // ប្រើសម្រាប់ Geolocation
 
-// --- 2. Global State ---
-let db, auth;
-let currentUser = null;
-let allUsersData = [];
-let selectedUserId = null;
-let currentReturnRequestId = null;
-let historyUnsubscribe = null;
-let outHistoryUnsubscribe = null;
-let isEditing = false; // គ្រប់គ្រង State របស់ Edit Modal
+// Enable Firestore debug logging
+setLogLevel('debug');
 
-// --- Hard-coded Configs (Local) ---
+// --- Hard-coded Firebase Config ---
 const firebaseConfig = { apiKey: "AIzaSyDjr_Ha2RxOWEumjEeSdluIW3JmyM76mVk", authDomain: "dipermisstion.firebaseapp.com", projectId: "dipermisstion", storageBucket: "dipermisstion.firebasestorage.app", messagingSenderId: "512999406057", appId: "1:512999406057:web:953a281ab9dde7a9a0f378", measurementId: "G-KDPHXZ7H4B" };
+
+// --- Global State & Element References ---
+let db, auth, userId;
+let historyUnsubscribe = null, outHistoryUnsubscribe = null;
+let allUsersData = [], currentUser = null, selectedUserId = null;
+let currentReturnRequestId = null;
+let touchstartX = 0, touchendX = 0, isSwiping = false;
+let selectedLeaveDuration = null;
+let selectedLeaveReason = null;
+let selectedOutDuration = null;
+let selectedOutReason = null;
+
+// === START: MODIFICATION (Global Timers & State) ===
+let pendingAlertTimer15s = null;
+let pendingAlertTimer30s = null;
+let toastDisplayTimer = null;
+let isEditing = false; // តាមដាន Edit Modal
+// === END: MODIFICATION ===
+
+// المتغيرات​ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន
+let openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
+
+// --- Google Sheet Config ---
+const SHEET_ID = '1_Kgl8UQXRsVATt_BOHYQjVWYKkRIBA12R-qnsBoSUzc'; const SHEET_NAME = 'បញ្ជឺឈ្មោះរួម'; const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tq=${encodeURIComponent('SELECT E, L, AA, N, G, S WHERE E IS NOT NULL OFFSET 0')}`;
+const BOT_TOKEN = '8284240201:AAEDRGHDcuoQAhkWk7km6I-9csZNbReOPHw'; const CHAT_ID = '1487065922';
+let leaveRequestsCollectionPath, outRequestsCollectionPath;
 const allowedAreaCoords = [ [11.417052769150015, 104.76508285291308], [11.417130005964497, 104.76457396198742], [11.413876386899489, 104.76320488118378], [11.41373800267192, 104.76361527709159] ];
 const LOCATION_FAILURE_MESSAGE = "ការបញ្ជាក់ចូលមកវិញ បរាជ័យ។ \n\nប្រហែលទូរស័ព្ទអ្នកមានបញ្ហា ការកំណត់បើ Live Location ដូច្នោះអ្នកមានជម្រើសមួយទៀតគឺអ្នកអាចទៅបញ្ជាក់ដោយផ្ទាល់នៅការិយាល័យអគារ B ជាមួយក្រុមការងារលោកគ្រូ ដារ៉ូ។";
 
-// --- 3. Initialization ---
+// --- Element References ---
+let userSearchInput, userDropdown, userSearchError, scanFaceBtn, modelStatusEl, faceScanModal, video, scanStatusEl, scanDebugEl, cancelScanBtn, loginFormContainer, inAppWarning, dataLoadingIndicator, rememberMeCheckbox, mainAppContainer, homeUserName, loginPage, bottomNav, userPhotoEl, userNameEl, userIdEl, userGenderEl, userGroupEl, userDepartmentEl, logoutBtn, navButtons, pages, mainContent, requestLeavePage, openLeaveRequestBtn, cancelLeaveRequestBtn, submitLeaveRequestBtn, leaveDurationSearchInput, leaveDurationDropdownEl, leaveSingleDateContainer, leaveDateRangeContainer, leaveSingleDateInput, leaveStartDateInput, leaveEndDateInput, leaveRequestErrorEl, leaveRequestLoadingEl, leaveReasonSearchInput, leaveReasonDropdownEl, historyContainer, historyPlaceholder, criticalErrorDisplay, historyTabLeave, historyTabOut, historyContainerLeave, historyContainerOut, historyPlaceholderLeave, historyPlaceholderOut, historyContent, editModal, editModalTitle, editForm, editRequestId, editDurationSearchInput, editDurationDropdownEl, editSingleDateContainer, editLeaveDateSingle, editDateRangeContainer, editLeaveDateStart, editLeaveDateEnd, editReasonSearchInput, editReasonDropdownEl, editErrorEl, editLoadingEl, submitEditBtn, cancelEditBtn, deleteModal, deleteConfirmBtn, cancelDeleteBtn, deleteRequestId, deleteCollectionType, openOutRequestBtn, requestOutPage, cancelOutRequestBtn, submitOutRequestBtn, outRequestErrorEl, outRequestLoadingEl, outDurationSearchInput, outDurationDropdownEl, outReasonSearchInput, outReasonDropdownEl, outDateInput, returnScanModal, returnVideo, returnScanStatusEl, returnScanDebugEl, cancelReturnScanBtn, customAlertModal, customAlertTitle, customAlertMessage, customAlertOkBtn, customAlertIconWarning, customAlertIconSuccess, invoiceModal, closeInvoiceModalBtn, invoiceModalTitle, invoiceContentWrapper, invoiceContent, invoiceUserName, invoiceUserId, invoiceUserDept, invoiceRequestType, invoiceDuration, invoiceDates, invoiceReason, invoiceStatus, invoiceApprover, invoiceDecisionTime, invoiceRequestId, invoiceReturnInfo, invoiceReturnStatus, invoiceReturnTime, shareInvoiceBtn, invoiceShareStatus, pendingStatusAlert, pendingStatusMessage; // <-- Added new elements
+
+// --- Duration/Reason Constants ---
+const leaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ", "មួយថ្ងៃកន្លះ", "ពីរថ្ងៃ", "ពីរថ្ងៃកន្លះ", "បីថ្ងៃ", "បីថ្ងៃកន្លះ", "បួនថ្ងៃ", "បួនថ្ងៃកន្លះ", "ប្រាំថ្ងៃ", "ប្រាំថ្ងៃកន្លះ", "ប្រាំមួយថ្ងៃ", "ប្រាំមួយថ្ងៃកន្លះ", "ប្រាំពីរថ្ងៃ"]; const leaveDurationItems = leaveDurations.map(d => ({ text: d, value: d })); const leaveReasons = ["ឈឺក្បាល", "ចុកពោះ", "គ្រុនក្ដៅ", "ផ្ដាសាយ"]; const leaveReasonItems = leaveReasons.map(r => ({ text: r, value: r })); const singleDayLeaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ"]; const outDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយថ្ងៃ"]; const outDurationItems = outDurations.map(d => ({ text: d, value: d })); const outReasons = ["ទៅផ្សារ", "ទៅកាត់សក់", "ទៅភ្នំពេញ", "ទៅពេទ្យ", "ទៅយកអីវ៉ាន់"]; const outReasonItems = outReasons.map(r => ({ text: r, value: r })); const durationToDaysMap = { "មួយថ្ងៃកន្លះ": 1.5, "ពីរថ្ងៃ": 2, "ពីរថ្ងៃកន្លះ": 2.5, "បីថ្ងៃ": 3, "បីថ្ងៃកន្លះ": 3.5, "បួនថ្ងៃ": 4, "បួនថ្ងៃកន្លះ": 4.5, "ប្រាំថ្ងៃ": 5, "ប្រាំថ្ងៃកន្លះ": 5.5, "ប្រាំមួយថ្ងៃ": 6, "ប្រាំមួយថ្ងៃកន្លះ": 6.5, "ប្រាំពីរថ្ងៃ": 7 };
+
+// --- Date Helper Functions ---
+function getTodayString(format = 'yyyy-mm-dd') { const today = new Date(); const yyyy = today.getFullYear(); const mm = String(today.getMonth() + 1).padStart(2, '0'); const dd = String(today.getDate()).padStart(2, '0'); if (format === 'dd/mm/yyyy') return `${dd}/${mm}/${yyyy}`; return `${yyyy}-${mm}-${dd}`; }
+function formatDbDateToInput(dbDate) { if (!dbDate || dbDate.split('/').length !== 3) return getTodayString(); const parts = dbDate.split('/'); return `${parts[2]}-${parts[1]}-${parts[0]}`; }
+function formatInputDateToDb(inputDate) { if (!inputDate || inputDate.split('-').length !== 3) return getTodayString('dd/mm/yyyy'); const parts = inputDate.split('-'); return `${parts[2]}/${parts[1]}/${parts[0]}`; }
+function addDays(startDateStr, days) { try { const date = new Date(startDateStr); if (isNaN(date.getTime())) return getTodayString(); date.setDate(date.getDate() + Math.ceil(days) - 1); const yyyy = date.getFullYear(); const mm = String(date.getMonth() + 1).padStart(2, '0'); const dd = String(date.getDate()).padStart(2, '0'); return `${yyyy}-${mm}-${dd}`; } catch (e) { console.error("Error in addDays:", e); return getTodayString(); } }
+function formatFirestoreTimestamp(timestamp, format = 'HH:mm dd/MM/yyyy') { let date; if (!timestamp) return ""; if (timestamp instanceof Date) date = timestamp; else if (timestamp.toDate) date = timestamp.toDate(); else if (typeof timestamp === 'string') { date = new Date(timestamp); if (isNaN(date.getTime())) return ""; } else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000); else return ""; const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); if (format === 'HH:mm' || format === 'time') return `${hours}:${minutes}`; if (format === 'dd/MM/yyyy' || format === 'date') return `${day}/${month}/${year}`; return `${hours}:${minutes} ${day}/${month}/${year}`; }
+function parseReturnedAt_(returnedAtString) { if (!returnedAtString || typeof returnedAtString !== 'string') return { date: "", time: "" }; const parts = returnedAtString.split(' '); if (parts.length === 2) return { time: parts[0], date: parts[1] }; return { date: returnedAtString, time: "" }; }
+function formatDateToDdMmmYyyy(dateString) {
+     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let date;
+    if (dateString.includes('-') && dateString.split('-').length === 3) { // yyyy-mm-dd
+        const parts = dateString.split('-');
+        date = new Date(parts[0], parts[1] - 1, parts[2]); // year, month (0-indexed), day
+    } else if (dateString.includes('/') && dateString.split('/').length === 3) { // dd/mm/yyyy
+        const parts = dateString.split('/');
+        date = new Date(parts[2], parts[1] - 1, parts[0]); // year, month (0-indexed), day
+    } else {
+        date = new Date(); // Fallback
+    }
+    if (isNaN(date.getTime())) date = new Date(); // Error handling
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`; // ត្រឡប់ជា '07-Nov-2025'
+}
+function parseDdMmmYyyyToInputFormat(ddMmmYyyy) {
+    if (!ddMmmYyyy || ddMmmYyyy.split('-').length !== 3) return getTodayString(); // fallback
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const parts = ddMmmYyyy.split('-'); // [ '07', 'Nov', '2025' ]
+    if(parts.length !== 3) return getTodayString();
+    const day = parts[0];
+    const monthIndex = monthNames.indexOf(parts[1]);
+    const year = parts[2];
+    if (monthIndex === -1) return getTodayString(); // fallback
+    const mm = String(monthIndex + 1).padStart(2, '0');
+    return `${year}-${mm}-${day}`; // ត្រឡប់ជា 'yyyy-mm-dd'
+}
+
+// --- App Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. ភ្ជាប់ UI Elements ទាំងអស់
-    UI.assignElements(); 
 
-    // 2. ភ្ជាប់ Firebase
-    try {
-        setLogLevel('debug');
-        if (!firebaseConfig.projectId) throw new Error("projectId not provided in firebase.initializeApp.");
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
+    // --- Assign Element References ---
+    userSearchInput = document.getElementById('user-search'); userDropdown = document.getElementById('user-dropdown'); userSearchError = document.getElementById('user-search-error'); scanFaceBtn = document.getElementById('scan-face-btn'); modelStatusEl = document.getElementById('model-status'); faceScanModal = document.getElementById('face-scan-modal'); video = document.getElementById('video'); scanStatusEl = document.getElementById('scan-status'); scanDebugEl = document.getElementById('scan-debug'); cancelScanBtn = document.getElementById('cancel-scan-btn'); loginFormContainer = document.getElementById('login-form-container'); inAppWarning = document.getElementById('in-app-warning'); dataLoadingIndicator = document.getElementById('data-loading-indicator'); rememberMeCheckbox = document.getElementById('remember-me'); mainAppContainer = document.getElementById('main-app-container'); homeUserName = document.getElementById('home-user-name'); loginPage = document.getElementById('page-login'); bottomNav = document.getElementById('bottom-navigation'); userPhotoEl = document.getElementById('user-photo'); userNameEl = document.getElementById('user-name'); userIdEl = document.getElementById('user-id'); userGenderEl = document.getElementById('user-gender'); userGroupEl = document.getElementById('user-group'); userDepartmentEl = document.getElementById('user-department'); logoutBtn = document.getElementById('logout-btn'); navButtons = document.querySelectorAll('.nav-btn');
+    mainContent = document.getElementById('main-content'); criticalErrorDisplay = document.getElementById('critical-error-display'); requestLeavePage = document.getElementById('page-request-leave'); openLeaveRequestBtn = document.getElementById('open-leave-request-btn'); cancelLeaveRequestBtn = document.getElementById('cancel-leave-request-btn'); submitLeaveRequestBtn = document.getElementById('submit-leave-request-btn'); leaveDurationSearchInput = document.getElementById('leave-duration-search'); leaveDurationDropdownEl = document.getElementById('leave-duration-dropdown'); leaveSingleDateContainer = document.getElementById('leave-single-date-container'); leaveDateRangeContainer = document.getElementById('leave-date-range-container'); leaveSingleDateInput = document.getElementById('leave-date-single'); leaveStartDateInput = document.getElementById('leave-date-start'); leaveEndDateInput = document.getElementById('leave-date-end'); leaveRequestErrorEl = document.getElementById('leave-request-error'); leaveRequestLoadingEl = document.getElementById('leave-request-loading'); leaveReasonSearchInput = document.getElementById('leave-reason-search'); leaveReasonDropdownEl = document.getElementById('leave-reason-dropdown'); historyContainer = document.getElementById('history-container'); historyPlaceholder = document.getElementById('history-placeholder'); historyTabLeave = document.getElementById('history-tab-leave'); historyTabOut = document.getElementById('history-tab-out'); historyContainerLeave = document.getElementById('history-container-leave'); historyContainerOut = document.getElementById('history-container-out'); historyPlaceholderLeave = document.getElementById('history-placeholder-leave'); historyPlaceholderOut = document.getElementById('history-placeholder-out'); historyContent = document.getElementById('history-content'); editModal = document.getElementById('edit-modal'); editModalTitle = document.getElementById('edit-modal-title'); editForm = document.getElementById('edit-form'); editRequestId = document.getElementById('edit-request-id'); editDurationSearchInput = document.getElementById('edit-duration-search'); editDurationDropdownEl = document.getElementById('edit-duration-dropdown'); editSingleDateContainer = document.getElementById('edit-single-date-container'); editLeaveDateSingle = document.getElementById('edit-leave-date-single'); editDateRangeContainer = document.getElementById('edit-date-range-container'); editLeaveDateStart = document.getElementById('edit-leave-date-start'); editLeaveDateEnd = document.getElementById('edit-leave-date-end'); editReasonSearchInput = document.getElementById('edit-reason-search'); editReasonDropdownEl = document.getElementById('edit-reason-dropdown'); editErrorEl = document.getElementById('edit-error'); editLoadingEl = document.getElementById('edit-loading'); submitEditBtn = document.getElementById('submit-edit-btn'); cancelEditBtn = document.getElementById('cancel-edit-btn'); deleteModal = document.getElementById('delete-modal'); deleteConfirmBtn = document.getElementById('delete-confirm-btn'); cancelDeleteBtn = document.getElementById('cancel-delete-btn'); deleteRequestId = document.getElementById('delete-request-id'); deleteCollectionType = document.getElementById('delete-collection-type'); openOutRequestBtn = document.getElementById('open-out-request-btn'); requestOutPage = document.getElementById('page-request-out'); cancelOutRequestBtn = document.getElementById('cancel-out-request-btn'); submitOutRequestBtn = document.getElementById('submit-out-request-btn'); outRequestErrorEl = document.getElementById('out-request-error'); outRequestLoadingEl = document.getElementById('out-request-loading'); outDurationSearchInput = document.getElementById('out-duration-search'); outDurationDropdownEl = document.getElementById('out-duration-dropdown'); outReasonSearchInput = document.getElementById('out-reason-search'); outReasonDropdownEl = document.getElementById('out-reason-dropdown'); outDateInput = document.getElementById('out-date-single'); returnScanModal = document.getElementById('return-scan-modal'); returnVideo = document.getElementById('return-video'); returnScanStatusEl = document.getElementById('return-scan-status'); returnScanDebugEl = document.getElementById('return-scan-debug'); cancelReturnScanBtn = document.getElementById('cancel-return-scan-btn'); customAlertModal = document.getElementById('custom-alert-modal'); customAlertTitle = document.getElementById('custom-alert-title'); customAlertMessage = document.getElementById('custom-alert-message'); customAlertOkBtn = document.getElementById('custom-alert-ok-btn'); customAlertIconWarning = document.getElementById('custom-alert-icon-warning'); customAlertIconSuccess = document.getElementById('custom-alert-icon-success'); invoiceModal = document.getElementById('invoice-modal'); closeInvoiceModalBtn = document.getElementById('close-invoice-modal-btn'); invoiceModalTitle = document.getElementById('invoice-modal-title'); invoiceContentWrapper = document.getElementById('invoice-content-wrapper'); invoiceContent = document.getElementById('invoice-content'); invoiceUserName = document.getElementById('invoice-user-name'); invoiceUserId = document.getElementById('invoice-user-id'); invoiceUserDept = document.getElementById('invoice-user-dept'); invoiceRequestType = document.getElementById('invoice-request-type'); invoiceDuration = document.getElementById('invoice-duration'); invoiceDates = document.getElementById('invoice-dates'); invoiceReason = document.getElementById('invoice-reason'); invoiceStatus = document.getElementById('invoice-status'); invoiceApprover = document.getElementById('invoice-approver'); invoiceDecisionTime = document.getElementById('invoice-decision-time'); invoiceRequestId = document.getElementById('invoice-request-id'); invoiceReturnInfo = document.getElementById('invoice-return-info'); invoiceReturnStatus = document.getElementById('invoice-return-status'); invoiceReturnTime = document.getElementById('invoice-return-time'); shareInvoiceBtn = document.getElementById('share-invoice-btn'); invoiceShareStatus = document.getElementById('invoice-share-status');
+    // === START: MODIFICATION (Add new element refs) ===
+    pendingStatusAlert = document.getElementById('pending-status-alert');
+    pendingStatusMessage = document.getElementById('pending-status-message');
+    // === END: MODIFICATION ===
+    openDailyAttendanceBtn = document.getElementById('open-daily-attendance-btn');
+    attendancePage = document.getElementById('page-daily-attendance');
+    closeAttendancePageBtn = document.getElementById('close-attendance-page-btn');
+    attendanceIframe = document.getElementById('attendance-iframe');
+    pages = ['page-home', 'page-history', 'page-account', 'page-help', 'page-request-leave', 'page-request-out', 'page-daily-attendance'];
+    if (customAlertOkBtn) customAlertOkBtn.addEventListener('click', hideCustomAlert);
+    if (closeInvoiceModalBtn) closeInvoiceModalBtn.addEventListener('click', hideInvoiceModal);
+    if (shareInvoiceBtn) shareInvoiceBtn.addEventListener('click', shareInvoiceAsImage);
+    if (historyContent) { historyContent.addEventListener('touchstart', handleTouchStart, false); historyContent.addEventListener('touchmove', handleTouchMove, false); historyContent.addEventListener('touchend', handleTouchEnd, false); }
+    function handleHistoryTap(event) { console.log("History container tapped. Target:", event.target); const invoiceBtn = event.target.closest('.invoice-btn'); const returnBtn = event.target.closest('.return-btn'); const editBtn = event.target.closest('.edit-btn'); const deleteBtn = event.target.closest('.delete-btn'); if (invoiceBtn) { console.log("Invoice button tapped directly via touchstart!", invoiceBtn.dataset.id); event.preventDefault(); openInvoiceModal(invoiceBtn.dataset.id, invoiceBtn.dataset.type); } else if (returnBtn) { console.log("Return button tapped directly via touchstart!", returnBtn.dataset.id); event.preventDefault(); startReturnConfirmation(returnBtn.dataset.id); } else if (editBtn) { console.log("Edit button tapped directly via touchstart!", editBtn.dataset.id); event.preventDefault(); openEditModal(editBtn.dataset.id, editBtn.dataset.type); } else if (deleteBtn) { console.log("Delete button tapped directly via touchstart!", deleteBtn.dataset.id); event.preventDefault(); openDeleteModal(deleteBtn.dataset.id, deleteBtn.dataset.type); } }
+    if (historyContainerLeave) historyContainerLeave.addEventListener('touchstart', handleHistoryTap, { passive: false });
+    if (historyContainerOut) historyContainerOut.addEventListener('touchstart', handleHistoryTap, { passive: false });
 
-        // 3. កំណត់ Collection Paths
-        const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const leavePath = `/artifacts/${canvasAppId}/public/data/leave_requests`;
-        const outPath = `/artifacts/${canvasAppId}/public/data/out_requests`;
-        
-        // 4. ផ្តួចផ្តើម (Initialize) ម៉ូឌុល Firestore
-        Store.initializeFirestore(db, leavePath, outPath);
+    // --- Setup Dropdowns AFTER elements are available ---
+    setupSearchableDropdown('user-search', 'user-dropdown', [], (id) => { 
+        selectedUserId = id;
+        FaceScanner.clearReferenceDescriptor(); 
+        console.log("Reference Descriptor Cleared on User Select.");
+        if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់');
+        console.log("Selected User ID:", selectedUserId);
+    });
+    setupSearchableDropdown('leave-duration-search', 'leave-duration-dropdown', leaveDurationItems, (duration) => { selectedLeaveDuration = duration; updateLeaveDateFields(duration); }, false);
+    setupSearchableDropdown('leave-reason-search', 'leave-reason-dropdown', leaveReasonItems, (reason) => { selectedLeaveReason = reason; }, true);
+    setupSearchableDropdown('out-duration-search', 'out-duration-dropdown', outDurationItems, (duration) => { selectedOutDuration = duration; }, false);
+    setupSearchableDropdown('out-reason-search', 'out-reason-dropdown', outReasonItems, (reason) => { selectedOutReason = reason; }, true);
+    setupSearchableDropdown('edit-duration-search', 'edit-duration-dropdown', [], () => {}, false); 
+    setupSearchableDropdown('edit-reason-search', 'edit-reason-dropdown', [], () => {}, true);
 
-        // 5. ភ្ជាប់ Event Listeners ទាំងអស់
-        bindAppEventListeners();
+    // --- Firebase Initialization & Auth ---
+    try { if (!firebaseConfig.projectId) throw new Error("projectId not provided in firebase.initializeApp."); console.log("Initializing Firebase with Config:", firebaseConfig); const app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app); const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; leaveRequestsCollectionPath = `/artifacts/${canvasAppId}/public/data/leave_requests`; outRequestsCollectionPath = `/artifacts/${canvasAppId}/public/data/out_requests`; console.log("Using Firestore Leave Path:", leaveRequestsCollectionPath); console.log("Using Firestore Out Path:", outRequestsCollectionPath); onAuthStateChanged(auth, (user) => { if (user) { console.log("Firebase Auth state changed. User UID:", user.uid); userId = user.uid; function isClient() { const ua = navigator.userAgent || navigator.vendor || window.opera; return ( (ua.indexOf('FBAN') > -1) || (ua.indexOf('FBAV') > -1) || (ua.indexOf('Twitter') > -1) || (ua.indexOf('Telegram') > -1) || (ua.indexOf('WebView') > -1) || (ua.indexOf('wv') > -1) ); } if (isClient()) { console.log("Detected In-App Browser."); if (inAppWarning) inAppWarning.classList.remove('hidden'); if (modelStatusEl) modelStatusEl.textContent = 'សូមបើកក្នុង Browser ពេញលេញ'; if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); } else { console.log("Detected Full Browser."); if (inAppWarning) inAppWarning.classList.add('hidden'); if (typeof faceapi !== 'undefined') { if (scanFaceBtn) scanFaceBtn.disabled = true;
+                FaceScanner.loadFaceApiModels(modelStatusEl, () => {
+                    if (scanFaceBtn) scanFaceBtn.disabled = (selectedUserId === null);
+                });
+            } else { console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។"); if (modelStatusEl) modelStatusEl.textContent = 'Error: មិនអាចទាញយក Library ស្កេនមុខបាន'; } const rememberedUser = localStorage.getItem('leaveAppUser'); if (rememberedUser) { try { const parsedUser = JSON.parse(rememberedUser); if (parsedUser && parsedUser.id) { console.log("Found remembered user:", parsedUser.id); currentUser = parsedUser; showLoggedInState(parsedUser); fetchUsers(); return; } } catch (e) { localStorage.removeItem('leaveAppUser'); } } console.log("No remembered user found, starting normal app flow."); initializeAppFlow(); } } else { console.log("Firebase Auth: No user signed in. Attempting anonymous sign-in..."); signInAnonymously(auth).catch(anonError => { console.error("Error during automatic anonymous sign-in attempt:", anonError); if (criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាច Sign In បានទេ។ ${anonError.message}។ សូម Refresh ម្ដងទៀត។`; } }); } }); try { console.log("Attempting initial Anonymous Sign-In..."); await signInAnonymously(auth); console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in)."); } catch (e) { console.error("Initial Anonymous Sign-In Error:", e); if (e.code === 'auth/operation-not-allowed') { throw new Error("សូមបើក 'Anonymous' sign-in នៅក្នុង Firebase Console។"); } throw new Error(`Firebase Sign-In Error: ${e.message}`); } } catch (e) { console.error("Firebase Initialization/Auth Error:", e); if(criticalErrorDisplay) { criticalErrorDisplay.classList.remove('hidden'); criticalErrorDisplay.textContent = `Critical Error: មិនអាចតភ្ជាប់ Firebase បានទេ។ ${e.message}។ សូម Refresh ម្ដងទៀត។`; } if(loginPage) loginPage.classList.add('hidden'); }
 
-        // 6. ចាប់ផ្តើម Auth Flow
-        setupAuthListener();
+    // --- Main App Logic ---
+    function initializeAppFlow() { console.log("initializeAppFlow called (for non-remembered user)."); console.log("Fetching users for initial login..."); if (dataLoadingIndicator) dataLoadingIndicator.classList.remove('hidden'); fetchUsers(); }
+    async function fetchUsers() { console.log("Fetching users from Google Sheet..."); try { const response = await fetch(GVIZ_URL); if (!response.ok) throw new Error(`Google Sheet fetch failed: ${response.status}`); const text = await response.text(); const match = text.match(/google\.visualization\.Query\.setResponse\((.*)\);/s); if (!match || !match[1]) throw new Error("ទម្រង់ការឆ្លើយតបពី Google Sheet មិនត្រឹមត្រូវ"); const json = JSON.parse(match[1]); if (json.table && json.table.rows && json.table.rows.length > 0) { allUsersData = json.table.rows.map(row => ({ id: row.c?.[0]?.v ?? null, name: row.c?.[1]?.v ?? null, photo: row.c?.[2]?.v ?? null, gender: row.c?.[3]?.v ?? null, group: row.c?.[4]?.v ?? null, department: row.c?.[5]?.v ?? null })); console.log(`Fetched ${allUsersData.length} users.`);
+    populateUserDropdown(allUsersData, 'user-search', 'user-dropdown', (id) => { 
+        selectedUserId = id; 
+        FaceScanner.clearReferenceDescriptor();
+        console.log("Reference Descriptor Cleared on populateUserDropdown.");
+        if (scanFaceBtn) scanFaceBtn.disabled = (id === null || !modelStatusEl || modelStatusEl.textContent !== 'Model ស្កេនមុខបានទាញយករួចរាល់'); 
+        console.log("Selected User ID:", selectedUserId); 
+    });
+        if (dataLoadingIndicator) dataLoadingIndicator.classList.add('hidden'); if (loginFormContainer) loginFormContainer.classList.remove('hidden'); } else { throw new Error("រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់"); } } catch (error) { console.error("Error ពេលទាញយកទិន្នន័យ Google Sheet:", error); if (dataLoadingIndicator) { dataLoadingIndicator.innerHTML = `<p class="text-red-600 font-semibold">Error: មិនអាចទាញយកទិន្នន័យបាន</p><p class="text-gray-600 text-sm mt-1">សូមពិនិត្យអ៊ីនធឺណិត និង Refresh ម្ដងទៀត។</p>`; dataLoadingIndicator.classList.remove('hidden'); } } }
 
-        // 7. ព្យាយាម Sign In
-        await signInAnonymously(auth);
-        console.log("Firebase Auth: Initial Anonymous Sign-In successful (or already signed in).");
+    // --- Reusable Searchable Dropdown Logic (Performance Fix) ---
+    function setupSearchableDropdown(inputId, dropdownId, items, onSelectCallback, allowCustom = false) {
+        const searchInput = document.getElementById(inputId);
+        const dropdown = document.getElementById(dropdownId);
+        if (!searchInput || !dropdown) {
+            console.error(`Dropdown elements not found: inputId=${inputId}, dropdownId=${dropdownId}`);
+            return;
+        }
+        
+        const MAX_RESULTS_TO_SHOW = 20;
 
-    } catch (e) {
-        console.error("Critical Firebase Initialization/Auth Error:", e);
-        UI.showCriticalError(`Critical Error: មិនអាចតភ្ជាប់ Firebase បានទេ។ ${e.message}។ សូម Refresh ម្ដងទៀត។`);
+        function populateDropdown(filter = '') {
+            dropdown.innerHTML = '';
+            const filterLower = filter.toLowerCase();
+
+            if (filterLower === '' && inputId === 'user-search') {
+                const itemEl = document.createElement('div');
+                itemEl.textContent = `សូមវាយ ID ឬ ឈ្មោះ (ទិន្នន័យសរុប ${items.length} នាក់)`;
+                itemEl.className = 'px-4 py-2 text-gray-500 text-sm italic';
+                dropdown.appendChild(itemEl);
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            const filteredItems = items.filter(item => item.text && item.text.toLowerCase().includes(filterLower));
+
+            if (filteredItems.length === 0) {
+                if (filterLower !== '' || (filterLower === '' && inputId !== 'user-search')) {
+                    const itemEl = document.createElement('div');
+                    itemEl.textContent = 'រកមិនឃើញ...';
+                    itemEl.className = 'px-4 py-2 text-gray-500 text-sm italic';
+                    dropdown.appendChild(itemEl);
+                    dropdown.classList.remove('hidden');
+                } else {
+                    dropdown.classList.add('hidden');
+                }
+                return;
+            }
+            
+            const itemsToShow = filteredItems.slice(0, MAX_RESULTS_TO_SHOW);
+
+            itemsToShow.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.textContent = item.text;
+                itemEl.dataset.value = item.value;
+                itemEl.className = 'px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm';
+                itemEl.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    searchInput.value = item.text;
+                    dropdown.classList.add('hidden');
+                    if (onSelectCallback) onSelectCallback(item.value);
+                    console.log(`Selected dropdown item: ${item.text} (value: ${item.value})`);
+                });
+                dropdown.appendChild(itemEl);
+            });
+
+            if (filteredItems.length > MAX_RESULTS_TO_SHOW) {
+                const moreEl = document.createElement('div');
+                moreEl.textContent = `... និង ${filteredItems.length - MAX_RESULTS_TO_SHOW} ផ្សេងទៀត`;
+                moreEl.className = 'px-4 py-2 text-gray-400 text-xs italic';
+                dropdown.appendChild(moreEl);
+            }
+
+            dropdown.classList.remove('hidden');
+        }
+
+        searchInput.addEventListener('input', () => {
+            const currentValue = searchInput.value;
+            populateDropdown(currentValue);
+            const exactMatch = items.find(item => item.text === currentValue);
+            const selection = exactMatch ? exactMatch.value : (allowCustom ? currentValue : null);
+            if (onSelectCallback) onSelectCallback(selection);
+        });
+
+        searchInput.addEventListener('focus', () => {
+            populateDropdown(searchInput.value);
+        });
+
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                dropdown.classList.add('hidden');
+                const currentValue = searchInput.value;
+                const validItem = items.find(item => item.text === currentValue);
+                if (validItem) {
+                    if (onSelectCallback) onSelectCallback(validItem.value);
+                } else if (allowCustom && currentValue.trim() !== '') {
+                    if (onSelectCallback) onSelectCallback(currentValue);
+                } else if (inputId !== 'user-search') {
+                    console.log(`Invalid selection on ${inputId}: ${currentValue}`);
+                    if (onSelectCallback) onSelectCallback(null);
+                }
+            }, 150);
+        });
+    }
+    function populateUserDropdown(users, inputId, dropdownId, onSelectCallback) { const userItems = users.filter(user => user.id && user.name).map(user => ({ text: `${user.id} - ${user.name}`, value: user.id })); setupSearchableDropdown(inputId, dropdownId, userItems, onSelectCallback, false); }
+
+    // --- Face Scan Logic ---
+    async function startFaceScan() { 
+        console.log("startFaceScan called."); 
+        if (!selectedUserId) { 
+            showCustomAlert("Error", "សូមជ្រើសរើសអត្តលេខរបស់អ្នកជាមុនសិន"); 
+            return; 
+        } 
+        const user = allUsersData.find(u => u.id === selectedUserId); 
+        if (!user || !user.photo) { 
+            showCustomAlert("Error", "មិនអាចទាញយករូបថតយោងរបស់អ្នកបានទេ។ សូមទាក់ទង IT Support។"); 
+            return; 
+        } 
+        if (faceScanModal) faceScanModal.classList.remove('hidden'); 
+        if (scanStatusEl) scanStatusEl.textContent = 'កំពុងព្យាយាមបើកកាមេរ៉ា...'; 
+        
+        try { 
+            if (scanStatusEl) scanStatusEl.textContent = 'កំពុងវិភាគរូបថតយោង...';
+            const referenceDescriptor = await FaceScanner.getReferenceDescriptor(user.photo); 
+            if (scanStatusEl) scanStatusEl.textContent = 'កំពុងស្នើសុំបើកកាមេរ៉ា...'; 
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} }); 
+
+            if (video) video.srcObject = stream; 
+            if (scanStatusEl) scanStatusEl.textContent = 'សូមដាក់មុខរបស់អ្នកឲ្យចំកាមេរ៉ា'; 
+            
+            FaceScanner.stopAdvancedFaceAnalysis(); 
+
+            const onSuccess = () => {
+                console.log("Login Scan Success!");
+                loginUser(selectedUserId); 
+                setTimeout(() => {
+                    if (faceScanModal) faceScanModal.classList.add('hidden');
+                }, 1000);
+            };
+
+            FaceScanner.startAdvancedFaceAnalysis(
+                video, 
+                scanStatusEl, 
+                scanDebugEl, 
+                referenceDescriptor, 
+                onSuccess
+            );
+        } catch (error) { 
+            console.error("Error during face scan process:", error); 
+            if (scanStatusEl) scanStatusEl.textContent = `Error: ${error.message}`; 
+            stopFaceScan(); 
+            setTimeout(() => { 
+                if (faceScanModal) faceScanModal.classList.add('hidden'); 
+                showCustomAlert("បញ្ហាស្កេនមុខ", `មានបញ្ហា៖\n${error.message}\nសូមប្រាកដថាអ្នកបានអនុញ្ញាតឲ្យប្រើកាមេរ៉ា។`); 
+            }, 1500); 
+        } 
     }
-});
+    function stopFaceScan() { 
+        FaceScanner.stopAdvancedFaceAnalysis(); 
+        if (video && video.srcObject) { 
+            video.srcObject.getTracks().forEach(track => track.stop()); 
+            video.srcObject = null; 
+        } 
+    }
+    if (scanFaceBtn) scanFaceBtn.addEventListener('click', startFaceScan);
+    if (cancelScanBtn) cancelScanBtn.addEventListener('click', () => { 
+        stopFaceScan(); 
+        FaceScanner.clearReferenceDescriptor();
+        console.log("Reference Descriptor Cleared on Cancel.");
+        if (faceScanModal) faceScanModal.classList.add('hidden'); 
+    });
 
-/**
- * ភ្ជាប់ Auth State Listener
- */
-function setupAuthListener() {
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            console.log("Firebase Auth state changed. User UID:", user.uid);
+    // --- App Navigation & State Logic ---
+    function loginUser(userIdToLogin) { const user = allUsersData.find(u => u.id === userIdToLogin); if (!user) { showCustomAlert("Login Error", "មានបញ្ហា Login: រកមិនឃើញទិន្នន័យអ្នកប្រើប្រាស់"); return; } if (rememberMeCheckbox && rememberMeCheckbox.checked) { localStorage.setItem('leaveAppUser', JSON.stringify(user)); } else { localStorage.removeItem('leaveAppUser'); } showLoggedInState(user); }
+    function logout() { 
+        currentUser = null; 
+        FaceScanner.clearReferenceDescriptor(); 
+        localStorage.removeItem('leaveAppUser'); 
+        if (loginPage) loginPage.classList.remove('hidden'); 
+        if (mainAppContainer) mainAppContainer.classList.add('hidden'); 
+        if (userPhotoEl) userPhotoEl.src = 'https://placehold.co/100x100/e2e8f0/64748b?text=User'; 
+        if (userNameEl) userNameEl.textContent = '...'; 
+        if (userIdEl) userIdEl.textContent = '...'; 
+        if (userSearchInput) userSearchInput.value = ''; 
+        selectedUserId = null; 
+        if (scanFaceBtn) scanFaceBtn.disabled = true; 
+        if (historyUnsubscribe) historyUnsubscribe(); 
+        if (outHistoryUnsubscribe) outHistoryUnsubscribe(); 
+        historyUnsubscribe = null; 
+        outHistoryUnsubscribe = null;
+        // === START: MODIFICATION (Clear timers on logout) ===
+        clearAllPendingTimers();
+        // === END: MODIFICATION ===
+        signInAnonymously(auth).catch(err => console.error("Error signing in anonymously after logout:", err)); 
+    }
+    function showLoggedInState(user) { currentUser = user; 
+        FaceScanner.clearReferenceDescriptor(); 
+        populateAccountPage(user); if (homeUserName) homeUserName.textContent = user.name || '...'; if (loginPage) loginPage.classList.add('hidden'); if (mainAppContainer) mainAppContainer.classList.remove('hidden'); if (criticalErrorDisplay) criticalErrorDisplay.classList.add('hidden'); navigateTo('page-home'); setupHistoryListeners(user.id); }
+    function populateAccountPage(user) { if (!user) return; if (userPhotoEl && user.photo) { const img = new Image(); img.crossOrigin = "anonymous"; img.src = user.photo; img.onload = () => userPhotoEl.src = img.src; img.onerror = () => userPhotoEl.src = 'https://placehold.co/100x100/e2e8f0/64748b?text=គ្មានរូប'; } else if (userPhotoEl) { userPhotoEl.src = 'https://placehold.co/100x100/e2e8f0/64748b?text=User'; } if (userNameEl) userNameEl.textContent = user.name || 'មិនមាន'; if (userIdEl) userIdEl.textContent = user.id || 'មិនមាន'; if (userGenderEl) userGenderEl.textContent = user.gender || 'មិនមាន'; if (userGroupEl) userGroupEl.textContent = user.group || 'មិនមាន'; if (userDepartmentEl) userDepartmentEl.textContent = user.department || 'មិនមាន'; }
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    function navigateTo(pageId) { console.log("Navigating to page:", pageId); pages.forEach(page => { const pageEl = document.getElementById(page); if (pageEl) pageEl.classList.add('hidden'); }); const targetPage = document.getElementById(pageId); if (targetPage) targetPage.classList.remove('hidden'); 
+            if (bottomNav) {
+                if (pageId === 'page-request-leave' || pageId === 'page-request-out' || pageId === 'page-daily-attendance') {
+                    bottomNav.classList.add('hidden');
+                } else {
+                    bottomNav.classList.remove('hidden');
+                }
+            }
+            if (navButtons) { navButtons.forEach(btn => { if (btn.dataset.page === pageId) { btn.classList.add('text-blue-600'); btn.classList.remove('text-gray-500'); } else { btn.classList.add('text-gray-500'); btn.classList.remove('text-blue-600'); } }); } if (mainContent) mainContent.scrollTop = 0; if (pageId === 'page-history') showHistoryTab('leave'); }
+    if (navButtons) { navButtons.forEach(button => { button.addEventListener('click', () => { const pageToNavigate = button.dataset.page; if (pageToNavigate) navigateTo(pageToNavigate); }); }); }
+
+    // --- History Page Tabs & Swipe ---
+    let currentHistoryTab = 'leave';
+    function showHistoryTab(tabName, fromSwipe = false) { if (tabName === currentHistoryTab && !fromSwipe) return; console.log(`Switching history tab to: ${tabName}`); currentHistoryTab = tabName; if (tabName === 'leave') { if (historyTabLeave) historyTabLeave.classList.add('border-blue-600', 'text-blue-600'); if (historyTabLeave) historyTabLeave.classList.remove('border-transparent', 'text-gray-500'); if (historyTabOut) historyTabOut.classList.add('border-transparent', 'text-gray-500'); if (historyTabOut) historyTabOut.classList.remove('border-blue-600', 'text-blue-600'); if (historyContainerLeave) historyContainerLeave.classList.remove('hidden'); if (historyContainerOut) historyContainerOut.classList.add('hidden'); } else { if (historyTabLeave) historyTabLeave.classList.remove('border-blue-600', 'text-blue-600'); if (historyTabLeave) historyTabLeave.classList.add('border-transparent', 'text-gray-500'); if (historyTabOut) historyTabOut.classList.add('border-blue-600', 'text-blue-600'); if (historyTabOut) historyTabOut.classList.remove('border-transparent', 'text-gray-500'); if (historyContainerLeave) historyContainerLeave.classList.add('hidden'); if (historyContainerOut) historyContainerOut.classList.remove('hidden'); } if (historyContent) historyContent.scrollTop = 0; }
+    if (historyTabLeave) historyTabLeave.addEventListener('click', () => showHistoryTab('leave'));
+    if (historyTabOut) historyTabOut.addEventListener('click', () => showHistoryTab('out'));
+    function handleTouchStart(evt) { const firstTouch = evt.touches[0]; touchstartX = firstTouch.clientX; isSwiping = true; }
+    function handleTouchMove(evt) { if (!isSwiping) return; const touch = evt.touches[0]; touchendX = touch.clientX; }
+    function handleTouchEnd(evt) { if (!isSwiping) return; isSwiping = false; const threshold = 50; const swipedDistance = touchendX - touchstartX; if (Math.abs(swipedDistance) > threshold) { if (swipedDistance < 0) { console.log("Swiped Left"); showHistoryTab('out', true); } else { console.log("Swiped Right"); showHistoryTab('leave', true); } } else { console.log("Swipe distance too short or vertical scroll."); } touchstartX = 0; touchendX = 0; }
+
+    // --- Leave Request Logic ---
+    function updateLeaveDateFields(duration) { const today = getTodayString(); const todayFormatted = getTodayString('dd/mm/yyyy'); if (!leaveSingleDateContainer || !leaveDateRangeContainer || !leaveSingleDateInput || !leaveStartDateInput || !leaveEndDateInput) { console.error("Date input elements not found for Leave form."); return; } if (!duration) { leaveSingleDateContainer.classList.add('hidden'); leaveDateRangeContainer.classList.add('hidden'); return; } if (singleDayLeaveDurations.includes(duration)) { leaveSingleDateContainer.classList.remove('hidden'); leaveDateRangeContainer.classList.add('hidden'); leaveSingleDateInput.value = todayFormatted; } else { leaveSingleDateContainer.classList.add('hidden'); leaveDateRangeContainer.classList.remove('hidden'); leaveStartDateInput.value = today; const days = durationToDaysMap[duration] ?? 1; const endDateValue = addDays(today, days); leaveEndDateInput.value = endDateValue; leaveEndDateInput.min = today; } }
+    if (openLeaveRequestBtn) openLeaveRequestBtn.addEventListener('click', () => { if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។"); const reqPhoto = document.getElementById('request-leave-user-photo'); const reqName = document.getElementById('request-leave-user-name'); const reqId = document.getElementById('request-leave-user-id'); const reqDept = document.getElementById('request-leave-user-department'); if(reqPhoto) reqPhoto.src = currentUser.photo || 'https://placehold.co/60x60/e2e8f0/64748b?text=User'; if(reqName) reqName.textContent = currentUser.name; if(reqId) reqId.textContent = currentUser.id; if(reqDept) reqDept.textContent = currentUser.department || 'មិនមាន'; if (leaveDurationSearchInput) leaveDurationSearchInput.value = ''; if (leaveReasonSearchInput) leaveReasonSearchInput.value = ''; selectedLeaveDuration = null; selectedLeaveReason = null; if (leaveSingleDateContainer) leaveSingleDateContainer.classList.add('hidden'); if (leaveDateRangeContainer) leaveDateRangeContainer.classList.add('hidden'); if (leaveRequestErrorEl) leaveRequestErrorEl.classList.add('hidden'); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = false; navigateTo('page-request-leave'); });
+    if (cancelLeaveRequestBtn) cancelLeaveRequestBtn.addEventListener('click', () => navigateTo('page-home'));
+    if (submitLeaveRequestBtn) submitLeaveRequestBtn.addEventListener('click', async () => { selectedLeaveDuration = leaveDurations.includes(leaveDurationSearchInput.value) ? leaveDurationSearchInput.value : null; selectedLeaveReason = leaveReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedLeaveDuration) { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedLeaveReason || selectedLeaveReason.trim() === '') { if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; leaveRequestErrorEl.classList.remove('hidden'); } return; } if (leaveRequestErrorEl) leaveRequestErrorEl.classList.add('hidden'); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.remove('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = true; try { const isSingleDay = singleDayLeaveDurations.includes(selectedLeaveDuration); const startDateInputVal = isSingleDay ? (leaveSingleDateInput ? leaveSingleDateInput.value : getTodayString('dd/mm/yyyy')) : (leaveStartDateInput ? formatInputDateToDb(leaveStartDateInput.value) : getTodayString('dd/mm/yyyy')); const endDateInputVal = isSingleDay ? startDateInputVal : (leaveEndDateInput ? formatInputDateToDb(leaveEndDateInput.value) : getTodayString('dd/mm/yyyy')); if (new Date(formatDbDateToInput(endDateInputVal)) < new Date(formatDbDateToInput(startDateInputVal))) { throw new Error('"ថ្ងៃបញ្ចប់" មិនអាចនៅមុន "ថ្ងៃចាប់ផ្តើម" បានទេ។'); } const requestId = `leave_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedLeaveDuration, reason: selectedLeaveReason.trim(), startDate: formatDateToDdMmmYyyy(startDateInputVal), endDate: formatDateToDdMmmYyyy(endDateInputVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !leaveRequestsCollectionPath) throw new Error("Firestore DB or Collection Path is not initialized."); const requestRef = doc(db, leaveRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (leave) write successful."); const dateString = (startDateInputVal === endDateInputVal) ? startDateInputVal : `ពី ${startDateInputVal} ដល់ ${endDateInputVal}`; let message = `<b>🔔 សំណើសុំច្បាប់ឈប់សម្រាក 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${dateString}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; await sendTelegramNotification(message); if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting leave request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (leaveRequestErrorEl) { leaveRequestErrorEl.textContent = `Error: ${displayError}`; leaveRequestErrorEl.classList.remove('hidden'); } if (leaveRequestLoadingEl) leaveRequestLoadingEl.classList.add('hidden'); if (submitLeaveRequestBtn) submitLeaveRequestBtn.disabled = false; } });
+
+    // --- Out Request Logic ---
+    if (openOutRequestBtn) openOutRequestBtn.addEventListener('click', () => { if (!currentUser) return showCustomAlert("Error", "សូម Login ជាមុនសិន។"); const reqPhoto = document.getElementById('request-out-user-photo'); const reqName = document.getElementById('request-out-user-name'); const reqId = document.getElementById('request-out-user-id'); const reqDept = document.getElementById('request-out-user-department'); if(reqPhoto) reqPhoto.src = currentUser.photo || 'https://placehold.co/60x60/e2e8f0/64748b?text=User'; if(reqName) reqName.textContent = currentUser.name; if(reqId) reqId.textContent = currentUser.id; if(reqDept) reqDept.textContent = currentUser.department || 'មិនមាន'; if (outDurationSearchInput) outDurationSearchInput.value = ''; if (outReasonSearchInput) outReasonSearchInput.value = ''; if (outDateInput) outDateInput.value = getTodayString('dd/mm/yyyy'); selectedOutDuration = null; selectedOutReason = null; if (outRequestErrorEl) outRequestErrorEl.classList.add('hidden'); if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = false; navigateTo('page-request-out'); });
+    if (cancelOutRequestBtn) cancelOutRequestBtn.addEventListener('click', () => navigateTo('page-home'));
+    if (submitOutRequestBtn) submitOutRequestBtn.addEventListener('click', async () => { selectedOutDuration = outDurations.includes(outDurationSearchInput.value) ? outDurationSearchInput.value : null; selectedOutReason = outReasonSearchInput.value; if (!currentUser || !currentUser.id) return showCustomAlert("Error", "មានបញ្ហា៖ មិនអាចបញ្ជាក់អ្នកប្រើប្រាស់បានទេ។"); if (!selectedOutDuration) { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមជ្រើសរើស "រយៈពេល" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (!selectedOutReason || selectedOutReason.trim() === '') { if (outRequestErrorEl) { outRequestErrorEl.textContent = 'សូមបំពេញ "មូលហេតុ" ជាមុនសិន។'; outRequestErrorEl.classList.remove('hidden'); } return; } if (outRequestErrorEl) outRequestErrorEl.classList.add('hidden'); if (outRequestLoadingEl) outRequestLoadingEl.classList.remove('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = true; try { const dateVal = outDateInput ? outDateInput.value : getTodayString('dd/mm/yyyy'); const requestId = `out_${Date.now()}`; const requestData = { userId: currentUser.id, name: currentUser.name, department: currentUser.department || 'N/A', photo: currentUser.photo || null, duration: selectedOutDuration, reason: selectedOutReason.trim(), startDate: formatDateToDdMmmYyyy(dateVal), endDate: formatDateToDdMmmYyyy(dateVal), status: 'pending', requestedAt: serverTimestamp(), requestId: requestId, firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user' }; if (!db || !outRequestsCollectionPath) throw new Error("Firestore DB or Out Collection Path is not initialized."); const requestRef = doc(db, outRequestsCollectionPath, requestId); await setDoc(requestRef, requestData); console.log("Firestore (out) write successful."); let message = `<b>🔔 សំណើសុំច្បាប់ចេញក្រៅ 🔔</b>\n\n`; message += `<b>ឈ្មោះ:</b> ${requestData.name} (${requestData.userId})\n`; message += `<b>ផ្នែក:</b> ${requestData.department}\n`; message += `<b>រយៈពេល:</b> ${requestData.duration}\n`; message += `<b>កាលបរិច្ឆេទ:</b> ${requestData.startDate}\n`; message += `<b>មូលហេតុ:</b> ${requestData.reason}\n\n`; message += `(សូមចូល Firestore ដើម្បីពិនិត្យ ID: \`${requestId}\`)`; await sendTelegramNotification(message); if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success'); navigateTo('page-history'); } catch (error) { console.error("Error submitting out request:", error); let displayError = error.message; if (error.code?.includes('permission-denied')) displayError = 'Missing or insufficient permissions. សូមពិនិត្យ Firestore Rules។'; if (outRequestErrorEl) { outRequestErrorEl.textContent = `Error: ${displayError}`; outRequestErrorEl.classList.remove('hidden'); } if (outRequestLoadingEl) outRequestLoadingEl.classList.add('hidden'); if (submitOutRequestBtn) submitOutRequestBtn.disabled = false; } });
+
+    // --- Telegram Helper ---
+    async function sendTelegramNotification(message) { console.log("Sending Telegram notification..."); try { const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`; const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: 'HTML' }) }); if (!res.ok) { const errBody = await res.text(); console.error("Telegram API error:", res.status, errBody); } else { console.log("Telegram notification sent successfully."); } } catch (e) { console.error("Failed to send Telegram message:", e); } }
+
+    // --- Custom Alert Modal Logic ---
+    function showCustomAlert(title, message, type = 'warning') { if (!customAlertModal) return; if (customAlertTitle) customAlertTitle.textContent = title; if (customAlertMessage) customAlertMessage.textContent = message; if (type === 'success') { if (customAlertIconSuccess) customAlertIconSuccess.classList.remove('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.add('hidden'); } else { if (customAlertIconSuccess) customAlertIconSuccess.classList.add('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.remove('hidden'); } customAlertModal.classList.remove('hidden'); }
+    function hideCustomAlert() { if (customAlertModal) customAlertModal.classList.add('hidden'); }
+
+    // === START: MODIFICATION (New Helper Functions for Pending Alert) ===
+    function showPendingAlert(message) {
+        if (!pendingStatusAlert || !pendingStatusMessage) return;
+        
+        // Clear 3-second hide timer (if any)
+        if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
+
+        pendingStatusMessage.textContent = message;
+        pendingStatusAlert.classList.remove('hidden');
+
+        // Auto-hide after 3 seconds
+        toastDisplayTimer = setTimeout(() => {
+            hidePendingAlert();
+        }, 3000); // 3-second display time
+    }
+
+    function hidePendingAlert() {
+        if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
+        toastDisplayTimer = null;
+        if (pendingStatusAlert) pendingStatusAlert.classList.add('hidden');
+    }
+
+    function clearAllPendingTimers() {
+        if (pendingAlertTimer15s) clearTimeout(pendingAlertTimer15s);
+        if (pendingAlertTimer30s) clearTimeout(pendingAlertTimer30s);
+        pendingAlertTimer15s = null;
+        pendingAlertTimer30s = null;
+        hidePendingAlert(); // Also hide any visible toast
+    }
+    // === END: MODIFICATION ===
+
+
+    // --- History Page Logic (Real-time) ---
+    function setupHistoryListeners(currentEmployeeId) { console.log("Setting up history listeners for employee ID:", currentEmployeeId); if (historyUnsubscribe) historyUnsubscribe(); if (outHistoryUnsubscribe) outHistoryUnsubscribe(); if (!db || !currentEmployeeId) return console.error("Firestore DB not initialized or Employee ID not set."); const now = new Date(); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); const startTimestamp = Timestamp.fromDate(startOfMonth); const endTimestamp = Timestamp.fromDate(endOfMonth); try { const leaveQuery = query(collection(db, leaveRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Leave Requests for current month..."); historyUnsubscribe = onSnapshot(leaveQuery, (snapshot) => { console.log(`Received LEAVE snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerLeave, historyPlaceholderLeave, 'leave'); }, (error) => { console.error("Error listening to LEAVE history:", error); if (historyPlaceholderLeave) { historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create LEAVE history query:", e); if (historyPlaceholderLeave) historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } try { const outQuery = query(collection(db, outRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Out Requests for current month..."); outHistoryUnsubscribe = onSnapshot(outQuery, (snapshot) => { console.log(`Received OUT snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerOut, historyPlaceholderOut, 'out'); }, (error) => { console.error("Error listening to OUT history:", error); if (historyPlaceholderOut) { historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create OUT history query:", e); if (historyPlaceholderOut) historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }
+    function getSortPriority(status) { switch(status) { case 'pending': return 1; case 'editing': return 2; case 'approved': return 3; case 'rejected': return 4; default: return 5; } }
+    
+    // === START: MODIFICATION (renderHistoryList with Timers) ===
+    function renderHistoryList(snapshot, container, placeholder, type) {
+        if (!container || !placeholder) return;
+        const requests = []; 
+
+        // === MODIFICATION: Clear all timers on any snapshot update ===
+        clearAllPendingTimers();
+
+        if (snapshot.empty) {
+            placeholder.classList.remove('hidden');
+            container.innerHTML = '';
+        } else {
+            placeholder.classList.add('hidden');
+            container.innerHTML = '';
+            snapshot.forEach(doc => requests.push(doc.data()));
+            requests.sort((a, b) => {
+                const priorityA = getSortPriority(a.status);
+                const priorityB = getSortPriority(b.status);
+                if (priorityA !== priorityB) return priorityA - priorityB;
+                const timeA = a.requestedAt?.toMillis() ?? 0;
+                const timeB = b.requestedAt?.toMillis() ?? 0;
+                return timeB - timeA;
+            });
+
+            // === START: New Pending Alert Logic ===
+            if (requests.length > 0) {
+                const topRequest = requests[0];
+                
+                // Only run timers if the top request is 'pending' (NOT 'editing')
+                if (topRequest.status === 'pending') {
+                    
+                    const requestedAtTime = topRequest.requestedAt?.toMillis();
+                    if (requestedAtTime) {
+                        const now = Date.now();
+                        const pendingDurationMs = now - requestedAtTime; // Time in milliseconds
+                        const pendingDurationSec = pendingDurationMs / 1000;
+
+                        console.log(`Top request is pending for ${pendingDurationSec.toFixed(0)} seconds.`);
+
+                        // Schedule the 15s timer IF it hasn't fired yet
+                        if (pendingDurationSec < 15) {
+                            const timeTo15s = (15 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 15s timer in ${timeTo15s.toFixed(0)}ms`);
+                            pendingAlertTimer15s = setTimeout(() => {
+                                // Check *again* when the timer fires
+                                const historyPage = document.getElementById('page-history');
+                                if (isEditing) return console.log("15s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("15s Timer: Canceled (Not on history page).");
+                                
+                                showPendingAlert("សំណើររបស់អ្នកមានការយឺតយ៉ាវបន្តិចប្រហែល Admin ជាប់រវល់ការងារច្រើន ឬសំណើររបស់អ្នកមានបញ្ហាខុសលក្ខខ័ណ្ឌអ្វីមួយ!");
+                            }, timeTo15s);
+                        }
+
+                        // Schedule the 30s timer IF it hasn't fired yet
+                        if (pendingDurationSec < 30) {
+                            const timeTo30s = (30 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 30s timer in ${timeTo30s.toFixed(0)}ms`);
+                            pendingAlertTimer30s = setTimeout(() => {
+                                // Check *again* when the timer fires
+                                const historyPage = document.getElementById('page-history');
+                                if (isEditing) return console.log("30s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("30s Timer: Canceled (Not on history page).");
+
+                                showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
+                                // TODO: Maybe send a reminder notification?
+                                // sendTelegramNotification(`🔔 REMINDER: Request ${topRequest.requestId} is still pending!`);
+                            }, timeTo30s);
+                        }
+                    }
+                }
+            }
+            // === END: New Pending Alert Logic ===
+
+            requests.forEach(request => container.innerHTML += renderHistoryCard(request, type));
+        }
+
+        if (type === 'leave') {
+            const hasPendingLeave = !snapshot.empty && (requests[0].status === 'pending' || requests[0].status === 'editing');
+            updateLeaveButtonState(hasPendingLeave);
+        } else if (type === 'out') {
+            let hasActiveOut = false;
+            if (!snapshot.empty) {
+                if (requests[0].status === 'pending' || requests[0].status === 'editing') {
+                    hasActiveOut = true;
+                } else {
+                    hasActiveOut = requests.some(r => r.status === 'approved' && r.returnStatus !== 'បានចូលមកវិញ');
+                }
+            }
+            updateOutButtonState(hasActiveOut);
+        }
+    }
+    // === END: MODIFICATION (renderHistoryList with Timers) ===
+
+    function renderHistoryCard(request, type) { if (!request || !request.requestId) return ''; let statusColor, statusText, decisionInfo = ''; switch(request.status) { case 'approved': statusColor = 'bg-green-100 text-green-800'; statusText = 'បានយល់ព្រម'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-green-600 mt-1">នៅម៉ោង: ${formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'rejected': statusColor = 'bg-red-100 text-red-800'; statusText = 'បានបដិសធ'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-red-600 mt-1">នៅម៉ោង: ${formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'editing': statusColor = 'bg-blue-100 text-blue-800'; statusText = 'កំពុងកែសម្រួល'; break; default: statusColor = 'bg-yellow-100 text-yellow-800'; statusText = 'កំពុងរង់ចាំ'; } const dateString = (request.startDate === request.endDate) ? request.startDate : (request.startDate && request.endDate ? `${request.startDate} ដល់ ${request.endDate}` : 'N/A'); const showActions = (request.status === 'pending' || request.status === 'editing'); let returnInfo = ''; let returnButton = ''; if (type === 'out') { if (request.returnStatus === 'បានចូលមកវិញ') returnInfo = `<p class="text-sm font-semibold text-green-700 mt-2">✔️ បានចូលមកវិញ: ${request.returnedAt || ''}</p>`; else if (request.status === 'approved') returnButton = `<button data-id="${request.requestId}" class="return-btn w-full mt-3 py-2 px-3 bg-green-600 text-white rounded-lg font-semibold text-sm shadow-sm hover:bg-green-700">បញ្ជាក់ចូលមកវិញ</button>`; } let invoiceButton = ''; if (request.status === 'approved') invoiceButton = `<button data-id="${request.requestId}" data-type="${type}" class="invoice-btn mt-3 py-1.5 px-3 bg-indigo-100 text-indigo-700 rounded-md font-semibold text-xs shadow-sm hover:bg-indigo-200 w-full sm:w-auto">ពិនិត្យមើលវិក័យប័ត្រ</button>`; return `<div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-4"><div class="flex justify-between items-start"><span class="font-semibold text-gray-800">${request.duration || 'N/A'}</span><span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}">${statusText}</span></div><p class="text-sm text-gray-600 mt-1">${dateString}</p><p class="text-sm text-gray-500 mt-1"><b>មូលហេតុ:</b> ${request.reason || 'មិនបានបញ្ជាក់'}</p>${decisionInfo}${returnInfo}<div class="mt-3 pt-3 border-t border-gray-100"><div class="flex flex-wrap justify-between items-center gap-2"><p class="text-xs text-gray-400">ID: ${request.requestId}</p>${showActions ? `<div class="flex space-x-2"><button data-id="${request.requestId}" data-type="${type}" class="edit-btn p-1 text-blue-600 hover:text-blue-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button><button data-id="${request.requestId}" data-type="${type}" class="delete-btn p-1 text-red-600 hover:text-red-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div>` : ''}${invoiceButton}</div>${returnButton}</div></div>`; }
+    function updateLeaveButtonState(isDisabled) {
+        if (!openLeaveRequestBtn) return; 
+        const leaveBtnText = openLeaveRequestBtn.querySelector('p.text-xs');
+        if (isDisabled) {
+            openLeaveRequestBtn.disabled = true;
+            openLeaveRequestBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-100');
+            openLeaveRequestBtn.classList.remove('bg-blue-50', 'hover:bg-blue-100');
+            if (leaveBtnText) leaveBtnText.textContent = 'មានសំណើកំពុងរង់ចាំ';
+        } else {
+            openLeaveRequestBtn.disabled = false;
+            openLeaveRequestBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-100');
+            openLeaveRequestBtn.classList.add('bg-blue-50', 'hover:bg-blue-100');
+            if (leaveBtnText) leaveBtnText.textContent = 'ឈប់សម្រាក';
+        }
+    }
+    function updateOutButtonState(isDisabled) {
+        if (!openOutRequestBtn) return;
+        const outBtnText = openOutRequestBtn.querySelector('p.text-xs');
+        if (isDisabled) {
+            openOutRequestBtn.disabled = true;
+            openOutRequestBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-100');
+            openOutRequestBtn.classList.remove('bg-green-50', 'hover:bg-green-100');
+            if (outBtnText) outBtnText.textContent = 'មានសំណើកំពុងដំណើរការ';
+        } else {
+            openOutRequestBtn.disabled = false;
+            openOutRequestBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-100');
+            openOutRequestBtn.classList.add('bg-green-50', 'hover:bg-green-100');
+            if (outBtnText) outBtnText.textContent = 'ចេញក្រៅផ្ទាល់ខ្លួន';
+        }
+    }
+
+    // --- MODIFICATION: អនុគមន៍ថ្មីសម្រាប់ Update Date ក្នុង Edit Modal ---
+    function updateEditDateFields(duration, type) {
+        console.log(`Updating edit date fields for duration: ${duration}, type: ${type}`);
+        if (!editSingleDateContainer || !editDateRangeContainer || !editLeaveDateSingle || !editLeaveDateStart || !editLeaveDateEnd) {
+            console.error("Date input elements not found for Edit form.");
+            return;
+        }
+        if (type === 'out') {
+            editSingleDateContainer.classList.remove('hidden');
+            editDateRangeContainer.classList.add('hidden');
+            return;
+        }
+        if (!duration) {
+            editSingleDateContainer.classList.add('hidden');
+            editDateRangeContainer.classList.add('hidden');
+            return;
+        }
+        if (singleDayLeaveDurations.includes(duration)) {
+            editSingleDateContainer.classList.remove('hidden');
+            editDateRangeContainer.classList.add('hidden');
+            if (editLeaveDateStart.value) {
+                editLeaveDateSingle.value = formatDateToDdMmmYyyy(editLeaveDateStart.value);
+            }
+        } else {
+            editSingleDateContainer.classList.add('hidden');
+            editDateRangeContainer.classList.remove('hidden');
+            let startDateInputVal;
+            if (editLeaveDateStart.value) {
+                startDateInputVal = editLeaveDateStart.value;
+            } else {
+                startDateInputVal = parseDdMmmYyyyToInputFormat(editLeaveDateSingle.value);
+                editLeaveDateStart.value = startDateInputVal; 
+            }
+            const days = durationToDaysMap[duration] ?? 1;
+            const endDateValue = addDays(startDateInputVal, days);
+            editLeaveDateEnd.value = endDateValue; 
+        }
+    }
+
+    // --- Edit Modal Logic (MODIFIED) ---
+    async function openEditModal(requestId, type) { 
+        isEditing = true; // === MODIFICATION: Set editing state ===
+        clearAllPendingTimers(); // === MODIFICATION: Stop timers when editing ===
+
+        if (!db || !requestId || !type) return; 
+        const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
+        if (!collectionPath) return; 
+        
+        if (editLoadingEl) editLoadingEl.classList.remove('hidden'); 
+        if (editErrorEl) editErrorEl.classList.add('hidden'); 
+        if (editModal) editModal.classList.remove('hidden'); 
+        
+        try { 
+            const requestRef = doc(db, collectionPath, requestId); 
+            await updateDoc(requestRef, { status: 'editing' }); 
+            console.log("Request status set to 'editing'"); 
             
-            // ពិនិត្យ In-App Browser
-            const isClient = () => { const ua = navigator.userAgent || navigator.vendor || window.opera; return ( (ua.indexOf('FBAN') > -1) || (ua.indexOf('FBAV') > -1) || (ua.indexOf('Twitter') > -1) || (ua.indexOf('Telegram') > -1) || (ua.indexOf('WebView') > -1) || (ua.indexOf('wv') > -1) ); };
-            UI.showInAppWarning(isClient());
+            const docSnap = await getDoc(requestRef); 
+            if (!docSnap.exists()) throw new Error("Document not found"); 
+            const data = docSnap.data(); 
 
-            if (!isClient()) {
-                // 1. ទាញយក Face Models
-                if (typeof faceapi !== 'undefined') {
-                    FaceScanner.loadFaceApiModels(
-                        document.getElementById('model-status'), // ត្រូវតែហៅ (call) Element ដោយផ្ទាល់
-                        () => {
-                            // === BUG FIX: ពេល Model load រួច, ពិនិត្យប៊ូតុង Scan ឡើងវិញ ===
-                            UI.updateScanButtonState(selectedUserId); 
-                        }
-                    );
-                } else {
-                    console.error("Face-API.js មិនអាចទាញយកបានត្រឹមត្រូវទេ។");
-                    UI.setFaceModelStatus('Error: មិនអាចទាញយក Library ស្កេនមុខបាន');
+            if (editModalTitle) editModalTitle.textContent = (type === 'leave') ? "កែសម្រួលច្បាប់ឈប់" : "កែសម្រួលច្បាប់ចេញក្រៅ"; 
+            if (editRequestId) editRequestId.value = requestId; 
+            if (editReasonSearchInput) editReasonSearchInput.value = data.reason || ''; 
+            if (editDurationSearchInput) editDurationSearchInput.value = data.duration; 
+
+            const currentDurationItems = (type === 'leave' ? leaveDurationItems : outDurationItems);
+            const currentReasonItems = (type === 'leave' ? leaveReasonItems : outReasonItems);
+            
+            setupSearchableDropdown(
+                'edit-duration-search', 
+                'edit-duration-dropdown', 
+                currentDurationItems, 
+                (duration) => { 
+                    updateEditDateFields(duration, type);
+                }, 
+                false
+            );
+            setupSearchableDropdown(
+                'edit-reason-search', 
+                'edit-reason-dropdown', 
+                currentReasonItems, 
+                () => {},
+                true
+            );
+
+            if (type === 'leave') { 
+                if (singleDayLeaveDurations.includes(data.duration)) { 
+                    if (editSingleDateContainer) editSingleDateContainer.classList.remove('hidden'); 
+                    if (editDateRangeContainer) editDateRangeContainer.classList.add('hidden'); 
+                    if (editLeaveDateSingle) editLeaveDateSingle.value = data.startDate; // Format: dd-Mmm-yyyy
+                } else { 
+                    if (editSingleDateContainer) editSingleDateContainer.classList.add('hidden'); 
+                    if (editDateRangeContainer) editDateRangeContainer.classList.remove('hidden'); 
+                    if (editLeaveDateStart) editLeaveDateStart.value = parseDdMmmYyyyToInputFormat(data.startDate); // Format: yyyy-mm-dd
+                    if (editLeaveDateEnd) editLeaveDateEnd.value = parseDdMmmYyyyToInputFormat(data.endDate); // Format: yyyy-mm-dd
+                } 
+            } else { // 'out'
+                if (editSingleDateContainer) editSingleDateContainer.classList.remove('hidden'); 
+                if (editDateRangeContainer) editDateRangeContainer.classList.add('hidden'); 
+                if (editLeaveDateSingle) editLeaveDateSingle.value = data.startDate; // Format: dd-Mmm-yyyy
+            } 
+            
+            if (editLoadingEl) editLoadingEl.classList.add('hidden'); 
+        } catch (e) { 
+            console.error("Error opening edit modal:", e); 
+            if (editLoadingEl) editLoadingEl.classList.add('hidden'); 
+            if (editErrorEl) { 
+                editErrorEl.textContent = `Error: ${e.message}`; 
+                editErrorEl.classList.remove('hidden'); 
+            } 
+            isEditing = false; // === MODIFICATION: Reset state on error ===
+        } 
+    }
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', async () => { 
+        const requestId = editRequestId.value; 
+        const type = (editModalTitle.textContent.includes("ឈប់")) ? 'leave' : 'out'; 
+        const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
+        if (requestId && collectionPath) { 
+            try { 
+                const requestRef = doc(db, collectionPath, requestId); 
+                await updateDoc(requestRef, { status: 'pending' }); 
+                console.log("Edit cancelled, status reverted to 'pending'"); 
+            } catch (e) { 
+                console.error("Error reverting status on edit cancel:", e); 
+            } 
+        } 
+        if (editModal) editModal.classList.add('hidden'); 
+        isEditing = false; // === MODIFICATION: Reset editing state ===
+    });
+
+    if (submitEditBtn) submitEditBtn.addEventListener('click', async () => { 
+        const requestId = editRequestId.value; 
+        const type = (editModalTitle.textContent.includes("ឈប់")) ? 'leave' : 'out'; 
+        const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
+        
+        const newDuration = (type === 'leave' ? leaveDurations : outDurations).includes(editDurationSearchInput.value) ? editDurationSearchInput.value : null;
+        const newReason = editReasonSearchInput.value; 
+
+        if (!newDuration) {
+            if(editErrorEl) { editErrorEl.textContent = "សូមជ្រើសរើស \"រយៈពេល\" ឲ្យបានត្រឹមត្រូវ (ពីក្នុងបញ្ជី)។"; editErrorEl.classList.remove('hidden'); } 
+            return;
+        }
+        if (!newReason || newReason.trim() === '') { 
+            if(editErrorEl) { editErrorEl.textContent = "មូលហេតុមិនអាចទទេបានទេ។"; editErrorEl.classList.remove('hidden'); } 
+            return; 
+        } 
+        
+        if (editLoadingEl) editLoadingEl.classList.remove('hidden'); 
+        if (editErrorEl) editErrorEl.classList.add('hidden'); 
+
+        try { 
+            const isSingleDay = (type === 'out') || singleDayLeaveDurations.includes(newDuration);
+            let finalStartDate, finalEndDate, dateStringForTelegram;
+
+            if (isSingleDay) {
+                let singleDateVal = editLeaveDateSingle.value; 
+                if (!singleDateVal || singleDateVal.includes('-')) { 
+                    singleDateVal = formatDateToDdMmmYyyy(editLeaveDateStart.value); 
                 }
-
-                // 2. ពិនិត្យ "Remember Me"
-                const rememberedUser = localStorage.getItem('leaveAppUser');
-                if (rememberedUser) {
-                    try {
-                        const parsedUser = JSON.parse(rememberedUser);
-                        if (parsedUser && parsedUser.id) {
-                            console.log("Found remembered user:", parsedUser.id);
-                            handleLoginSuccess(parsedUser); // Login ភ្លាម
-                            initializeAppFlow(true); // ទាញយក Users នៅ Background
-                            return;
-                        }
-                    } catch (e) { localStorage.removeItem('leaveAppUser'); }
-                }
-
-                // 3. User មិនទាន់ Login (Normal Flow)
-                console.log("No remembered user found, starting normal app flow.");
-                initializeAppFlow(false);
+                finalStartDate = singleDateVal;
+                finalEndDate = singleDateVal;
+                dateStringForTelegram = finalStartDate; 
+            } else {
+                finalStartDate = formatDateToDdMmmYyyy(editLeaveDateStart.value); 
+                finalEndDate = formatDateToDdMmmYyyy(editLeaveDateEnd.value); 
+                dateStringForTelegram = `ពី ${formatInputDateToDb(editLeaveDateStart.value)} ដល់ ${formatInputDateToDb(editLeaveDateEnd.value)}`; 
             }
 
-        } else {
-            console.log("Firebase Auth: No user signed in. Attempting anonymous sign-in...");
-            signInAnonymously(auth).catch(anonError => {
-                console.error("Error during automatic anonymous sign-in attempt:", anonError);
-                UI.showCriticalError(`Critical Error: មិនអាច Sign In បានទេ។ ${anonError.message}។ សូម Refresh ម្ដងទៀត។`);
-            });
+            const requestRef = doc(db, collectionPath, requestId); 
+            await updateDoc(requestRef, { 
+                duration: newDuration,
+                reason: newReason.trim(), 
+                startDate: finalStartDate,
+                endDate: finalEndDate,
+                status: 'pending', 
+                requestedAt: serverTimestamp() 
+            }); 
+            console.log("Edit submitted, status set to 'pending' with new duration/dates"); 
+            
+            let message = `<b>🔔 សំណើត្រូវបានកែសម្រួល 🔔</b>\n\n`; 
+            message += `<b>ID:</b> \`${requestId}\`\n`; 
+            message += `<b>រយៈពេលថ្មី:</b> ${newDuration}\n`;
+            message += `<b>មូលហេតុថ្មី:</b> ${newReason.trim()}\n`;
+            message += `<b>កាលបរិច្ឆេទ:</b> ${dateStringForTelegram}\n\n`;
+            message += `(សំណើនេះ ឥឡូវនេះ ស្ថិតក្នុងស្ថានភាព 'pending' ឡើងវិញ)`; 
+            await sendTelegramNotification(message); 
+            
+            if (editLoadingEl) editLoadingEl.classList.add('hidden'); 
+            if (editModal) editModal.classList.add('hidden'); 
+        } catch (e) { 
+            console.error("Error submitting edit:", e); 
+            if (editLoadingEl) editLoadingEl.classList.add('hidden'); 
+            if (editErrorEl) { 
+                editErrorEl.textContent = `Error: ${e.message}`; 
+                editErrorEl.classList.remove('hidden'); 
+            } 
+        } finally {
+            isEditing = false; // === MODIFICATION: Reset editing state ===
         }
     });
-}
 
-/**
- * ផ្តួចផ្តើម (Initialize) កម្មវិធី និងទាញយកទិន្នន័យ
- */
-function initializeAppFlow(isRememberedUser) {
-    console.log(`initializeAppFlow called (remembered: ${isRememberedUser}).`);
-    if (!isRememberedUser) {
-        UI.setLoginLoading(true);
-    }
-    handleFetchUsers();
-}
+    // --- Delete Modal Logic ---
+    function openDeleteModal(requestId, type) { if (deleteRequestId) deleteRequestId.value = requestId; if (deleteCollectionType) deleteCollectionType.value = type; if (deleteModal) deleteModal.classList.remove('hidden'); }
+    if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', () => { if (deleteModal) deleteModal.classList.add('hidden'); });
+    if (deleteConfirmBtn) deleteConfirmBtn.addEventListener('click', async () => { const requestId = deleteRequestId.value; const type = deleteCollectionType.value; const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; if (!db || !requestId || !collectionPath) { console.error("Cannot delete: Missing info"); return showCustomAlert("Error", "មិនអាចលុបបានទេ។"); } console.log("Attempting to delete doc:", requestId, "from:", collectionPath); deleteConfirmBtn.disabled = true; deleteConfirmBtn.textContent = 'កំពុងលុប...'; try { const requestRef = doc(db, collectionPath, requestId); await deleteDoc(requestRef); console.log("Document successfully deleted!"); if (deleteModal) deleteModal.classList.add('hidden'); } catch (e) { console.error("Error deleting document:", e); showCustomAlert("Error", `មិនអាចលុបបានទេ។ ${e.message}`); } finally { deleteConfirmBtn.disabled = false; deleteConfirmBtn.textContent = 'យល់ព្រមលុប'; } });
 
-/**
- * ភ្ជាប់ (Bind) រាល់ Events ពី UI ទៅកាន់ Controller Functions
- */
-function bindAppEventListeners() {
-    UI.bindEventListeners(
-        (pageId) => UI.navigateTo(pageId), // onNavigate
-        handleLogout,                     // onLogout
-        handleScanFace,                   // onScanFace
-        handleCancelScan,                 // onCancelScan
-        handleSubmitLeave,                // onSubmitLeave
-        () => UI.navigateTo('page-home'), // onCancelLeave
-        handleSubmitOut,                  // onSubmitOut
-        () => UI.navigateTo('page-home'), // onCancelOut
-        UI.openDailyAttendancePage,       // onOpenAttendance
-        UI.closeDailyAttendancePage,      // onCloseAttendance
-        handleOpenEdit,                   // onOpenEdit
-        handleSubmitEdit,                 // onSubmitEdit
-        handleCancelEdit,                 // onCancelEdit
-        UI.openDeleteModal,               // onOpenDelete
-        handleSubmitDelete,               // onSubmitDelete
-        UI.closeDeleteModal,              // onCancelDelete
-        handleOpenReturn,                 // onOpenReturn
-        handleCancelReturn,               // onCancelReturn
-        handleOpenInvoice,                // onOpenInvoice
-        UI.hideInvoiceModal,              // onCloseInvoice
-        UI.shareInvoiceAsImage,           // onShareInvoice
-        handleHistoryTap                  // onHistoryTap
-    );
-}
+    // --- RETURN CONFIRMATION LOGIC ---
+    function isPointInPolygon(point, polygon) { const [lat, lng] = point; let isInside = false; for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) { const [lat_i, lng_i] = polygon[i]; const [lat_j, lng_j] = polygon[j]; const intersect = ((lng_i > lng) !== (lng_j > lng)) && (lat < (lat_j - lat_i) * (lng - lng_i) / (lng_j - lng_i) + lat_i); if (intersect) isInside = !isInside; } return isInside; }
 
+    function stopReturnScan(clearId = true) { 
+        FaceScanner.stopAdvancedFaceAnalysis(); 
+        if (returnVideo && returnVideo.srcObject) { 
+            returnVideo.srcObject.getTracks().forEach(track => track.stop()); 
+            returnVideo.srcObject = null; 
+        } 
+        if (clearId) currentReturnRequestId = null; 
+    }
 
-// --- 4. Controller Functions (The "Glue") ---
+    async function startReturnConfirmation(requestId) { 
+        console.log("startReturnConfirmation called for:", requestId); 
+        if (!currentUser || !currentUser.photo) { 
+            showCustomAlert("Error", "មិនអាចទាញយករូបថតយោងរបស់អ្នកបានទេ។"); 
+            return; 
+        } 
+        currentReturnRequestId = requestId; 
+        if (returnScanModal) returnScanModal.classList.remove('hidden'); 
+        if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងព្យាយាមបើកកាមេរ៉ា...'; 
+        if (returnScanDebugEl) returnScanDebugEl.textContent = ''; 
+        
+        try { 
+            if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងវិភាគរូបថតយោង...'; 
+            const referenceDescriptor = await FaceScanner.getReferenceDescriptor(currentUser.photo); 
+            if (returnScanStatusEl) returnScanStatusEl.textContent = 'កំពុងស្នើសុំបើកកាមេរ៉ា...'; 
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} }); 
 
-/**
- * ទាញយកទិន្នន័យបុគ្គលិកពី API និង Populate Dropdown
- */
-async function handleFetchUsers() {
-    try {
-        allUsersData = await API.fetchUsers();
-        UI.populateUserDropdown(allUsersData, (id) => {
-            selectedUserId = id;
-            FaceScanner.clearReferenceDescriptor();
-            // === BUG FIX: ពេល User ជ្រើសរើស, ពិនិត្យប៊ូតុង Scan ឡើងវិញ ===
-            UI.updateScanButtonState(selectedUserId); 
-        });
-        UI.setLoginLoading(false); // លាក់ Loading, បង្ហាញ Form
-    } catch (error) {
-        console.error("Failed to fetch users:", error);
-        UI.setLoginError("Error: មិនអាចទាញយកទិន្នន័យបាន");
-    }
-}
+            if (returnVideo) returnVideo.srcObject = stream; 
+            if (returnScanStatusEl) returnScanStatusEl.textContent = 'សូមដាក់មុខរបស់អ្នកឲ្យចំកាមេរ៉ា'; 
 
-/**
- * ដំណើរការពេល Login ជោគជ័យ
- */
-function handleLoginSuccess(user) {
-    currentUser = user;
-    const rememberMeCheckbox = document.getElementById('remember-me'); // ត្រូវតែ get element នេះដោយផ្ទាល់
-    if (rememberMeCheckbox && rememberMeCheckbox.checked) {
-        localStorage.setItem('leaveAppUser', JSON.stringify(user));
-    } else {
-        localStorage.removeItem('leaveAppUser');
-    }
-    UI.showLoggedInState(user);
-    setupHistoryListeners();
-}
+            FaceScanner.stopAdvancedFaceAnalysis(); 
 
-/**
- * ដំណើរការពេល Logout
- */
-function handleLogout() {
-    currentUser = null;
-    selectedUserId = null; // សំខាន់
-    FaceScanner.clearReferenceDescriptor();
-    localStorage.removeItem('leaveAppUser');
-    UI.showLoggedOutState(); // នេះនឹង disable ប៊ូតុង Scan
-    if (historyUnsubscribe) historyUnsubscribe();
-    if (outHistoryUnsubscribe) outHistoryUnsubscribe();
-    historyUnsubscribe = null;
-    outHistoryUnsubscribe = null;
-    isEditing = false;
-}
+            const onSuccess = () => {
+                    console.log("Return Scan Success!");
+                    handleReturnFaceScanSuccess(); 
+                };
 
-/**
- * ចាប់ផ្តើមស្តាប់ (Listen) ប្រវត្តិ (History) ពី Firestore
- */
-function setupHistoryListeners() {
-    if (historyUnsubscribe) historyUnsubscribe();
-    if (outHistoryUnsubscribe) outHistoryUnsubscribe();
+            FaceScanner.startAdvancedFaceAnalysis(
+                returnVideo, 
+                returnScanStatusEl, 
+                returnScanDebugEl, 
+                referenceDescriptor, 
+                onSuccess
+            );
 
-    const userId = currentUser.id;
-    if (!userId) return;
+        } catch (error) { 
+            console.error("Error during return scan process:", error); 
+            if (returnScanStatusEl) returnScanStatusEl.textContent = `Error: ${error.message}`; 
+            stopReturnScan(true); 
+            setTimeout(() => { 
+                if (returnScanModal) returnScanModal.classList.add('hidden'); 
+                showCustomAlert("បញ្ហាស្កេនមុខ", `មានបញ្ហា៖\n${error.message}\nសូមប្រាកដថាអ្នកបានអនុញ្ញាតឲ្យប្រើកាមេរ៉ា។`); 
+            }, 1500); 
+        } 
+    }
 
-    // Listener សម្រាប់ Leave
-    historyUnsubscribe = Store.listenToLeaveHistory(
-        userId,
-        (snapshot) => { // onSnapshotCallback
-            UI.renderHistoryList(
-                snapshot, 
-                document.getElementById('history-container-leave'), 
-                document.getElementById('history-placeholder-leave'), 
-                'leave',
-                () => isEditing // បញ្ជូន Callback function សម្រាប់ពិនិត្យ state
-            );
-        },
-        (error) => { // onErrorCallback
-            console.error("Error listening to LEAVE history:", error);
-            document.getElementById('history-placeholder-leave').innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ</p>`;
-        }
-    );
+    if (cancelReturnScanBtn) cancelReturnScanBtn.addEventListener('click', () => { 
+        stopReturnScan(true); 
+        if (returnScanModal) returnScanModal.classList.add('hidden'); 
+    });
+    
+    function handleReturnFaceScanSuccess() { if (returnScanStatusEl) returnScanStatusEl.textContent = 'ស្កេនមុខជោគជ័យ!\nកំពុងស្នើសុំទីតាំង...'; if (returnScanDebugEl) returnScanDebugEl.textContent = 'សូមអនុញ្ញាតឲ្យប្រើ Location'; if (navigator.geolocation) { navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }); } else { console.error("Geolocation is not supported."); showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; } }
+    async function onLocationSuccess(position) { const userLat = position.coords.latitude; const userLng = position.coords.longitude; console.log(`Location found: ${userLat}, ${userLng}`); if (returnScanStatusEl) returnScanStatusEl.textContent = 'បានទីតាំង! កំពុងពិនិត្យ...'; if (returnScanDebugEl) returnScanDebugEl.textContent = `Lat: ${userLat.toFixed(6)}, Lng: ${userLng.toFixed(6)}`; const isInside = isPointInPolygon([userLat, userLng], allowedAreaCoords); if (isInside) { console.log("User is INSIDE."); if (returnScanStatusEl) returnScanStatusEl.textContent = 'ទីតាំងត្រឹមត្រូវ! កំពុងរក្សាទុក...'; await updateReturnStatusInFirestore(); } else { console.log("User is OUTSIDE."); if (returnScanStatusEl) returnScanStatusEl.textContent = 'ទីតាំងមិនត្រឹមត្រូវ។'; showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; } }
+    function onLocationError(error) { console.error(`Geolocation Error (${error.code}): ${error.message}`); if (returnScanStatusEl) returnScanStatusEl.textContent = 'មិនអាចទាញយកទីតាំងបានទេ។'; showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; }
+    async function updateReturnStatusInFirestore() { if (!currentReturnRequestId) { console.error("Cannot update return status: No request ID"); return; } try { const docRef = doc(db, outRequestsCollectionPath, currentReturnRequestId); const now = new Date(); const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); const date = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); const returnedAtString = `${time} ${date}`; await updateDoc(docRef, { returnStatus: "បានចូលមកវិញ", returnedAt: returnedAtString }); console.log("Return status updated successfully."); showCustomAlert("ជោគជ័យ!", "បញ្ជាក់ការចូលមកវិញ បានជោគជ័យ!", "success"); } catch (e) { console.error("Error updating Firestore return status:", e); showCustomAlert("Error", `មានបញ្ហាពេលរក្សាទុក: ${e.message}`); } finally { if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; } }
 
-    // Listener សម្រាប់ Out
-    outHistoryUnsubscribe = Store.listenToOutHistory(
-        userId,
-        (snapshot) => { // onSnapshotCallback
-            UI.renderHistoryList(
-                snapshot,
-                document.getElementById('history-container-out'),
-                document.getElementById('history-placeholder-out'),
-                'out',
-                () => isEditing // បញ្ជូន Callback function សម្រាប់ពិនិត្យ state
-            );
-        },
-        (error) => { // onErrorCallback
-            console.error("Error listening to OUT history:", error);
-            document.getElementById('history-placeholder-out').innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ</p>`;
-        }
-    );
-}
+    // --- INVOICE MODAL LOGIC ---
+    function hideInvoiceModal() { if (invoiceModal) invoiceModal.classList.add('hidden'); if (invoiceShareStatus) invoiceShareStatus.textContent = ''; if (shareInvoiceBtn) shareInvoiceBtn.disabled = false; }
+    async function openInvoiceModal(requestId, type) { console.log(`--- Attempting to open invoice for ${type} request ID: ${requestId} ---`); if (!db || !requestId || !type) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Missing ID or Type)"); return; } const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; if (!collectionPath) { showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Invalid Collection Path)"); return; } if (!invoiceModal) { console.error("Invoice modal element not found!"); return; } invoiceModal.classList.remove('hidden'); if(invoiceUserName) invoiceUserName.textContent='កំពុងទាញយក...'; if(invoiceUserId) invoiceUserId.textContent='...'; if(invoiceUserDept) invoiceUserDept.textContent='...'; if(invoiceRequestType) invoiceRequestType.textContent='...'; if(invoiceDuration) invoiceDuration.textContent='...'; if(invoiceDates) invoiceDates.textContent='...'; if(invoiceReason) invoiceReason.textContent='...'; if(invoiceApprover) invoiceApprover.textContent='...'; if(invoiceDecisionTime) invoiceDecisionTime.textContent='...'; if(invoiceRequestId) invoiceRequestId.textContent='...'; if(invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); if(shareInvoiceBtn) shareInvoiceBtn.disabled = true; try { const docRef = doc(db, collectionPath, requestId); console.log("Fetching Firestore doc:", docRef.path); const docSnap = await getDoc(docRef); if (!docSnap.exists()) { throw new Error("រកមិនឃើញសំណើរនេះទេ។"); } console.log("Firestore doc found."); const data = docSnap.data(); const requestTypeText = (type === 'leave') ? 'ច្បាប់ឈប់សម្រាក' : 'ច្បាប់ចេញក្រៅ'; const decisionTimeText = formatFirestoreTimestamp(data.decisionAt || data.requestedAt); const dateRangeText = (data.startDate === data.endDate) ? data.startDate : `${data.startDate} ដល់ ${data.endDate}`; if(invoiceModalTitle) invoiceModalTitle.textContent = `វិក័យប័ត្រ - ${requestTypeText}`; if(invoiceUserName) invoiceUserName.textContent = data.name || 'N/A'; if(invoiceUserId) invoiceUserId.textContent = data.userId || 'N/A'; if(invoiceUserDept) invoiceUserDept.textContent = data.department || 'N/A'; if(invoiceRequestType) invoiceRequestType.textContent = requestTypeText; if(invoiceDuration) invoiceDuration.textContent = data.duration || 'N/A'; if(invoiceDates) invoiceDates.textContent = dateRangeText; if(invoiceReason) invoiceReason.textContent = data.reason || 'N/Examples/N/A'; if(invoiceApprover) invoiceApprover.textContent = "លោកគ្រូ ពៅ ដារ៉ូ"; if(invoiceDecisionTime) invoiceDecisionTime.textContent = decisionTimeText; if(invoiceRequestId) invoiceRequestId.textContent = data.requestId || requestId; if (type === 'out' && data.returnStatus === 'បានចូលមកវិញ') { if (invoiceReturnStatus) invoiceReturnStatus.textContent = data.returnStatus; if (invoiceReturnTime) invoiceReturnTime.textContent = data.returnedAt || 'N/A'; if (invoiceReturnInfo) invoiceReturnInfo.classList.remove('hidden'); } else { if (invoiceReturnInfo) invoiceReturnInfo.classList.add('hidden'); } if(shareInvoiceBtn) { shareInvoiceBtn.dataset.requestId = data.requestId || requestId; shareInvoiceBtn.dataset.userName = data.name || 'User'; shareInvoiceBtn.dataset.requestType = requestTypeText; shareInvoiceBtn.disabled = false; } console.log("Invoice modal populated."); } catch (error) { console.error("Error opening/populating invoice modal:", error); hideInvoiceModal(); showCustomAlert("Error", `មិនអាចផ្ទុកទិន្នន័យវិក័យប័ត្របានទេ: ${error.message}`); } }
+    async function shareInvoiceAsImage() { if (!invoiceContent || typeof html2canvas === 'undefined' || !shareInvoiceBtn) { showCustomAlert("Error", "មុខងារ Share មិនទាន់រួចរាល់ ឬ Library បាត់។"); return; } if(invoiceShareStatus) invoiceShareStatus.textContent = 'កំពុងបង្កើតរូបភាព...'; shareInvoiceBtn.disabled = true; try { if(invoiceContentWrapper) invoiceContentWrapper.scrollTop = 0; await new Promise(resolve => setTimeout(resolve, 100)); const canvas = await html2canvas(invoiceContent, { scale: 2, useCORS: true, logging: false }); canvas.toBlob(async (blob) => { if (!blob) { throw new Error("មិនអាចបង្កើតរូបភាព Blob បានទេ។"); } if(invoiceShareStatus) invoiceShareStatus.textContent = 'កំពុងព្យាយាម Share...'; if (navigator.share && navigator.canShare) { const fileName = `Invoice_${shareInvoiceBtn.dataset.requestId || 'details'}.png`; const file = new File([blob], fileName, { type: blob.type }); const shareData = { files: [file], title: `វិក័យប័ត្រសុំច្បាប់ (${shareInvoiceBtn.dataset.requestType || ''})`, text: `វិក័យប័ត្រសុំច្បាប់សម្រាប់ ${shareInvoiceBtn.dataset.userName || ''} (ID: ${shareInvoiceBtn.dataset.requestId || ''})`, }; if (navigator.canShare(shareData)) { try { await navigator.share(shareData); console.log('Invoice shared successfully via Web Share API'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Share ជោគជ័យ!'; } catch (err) { console.error('Web Share API error:', err); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Share ត្រូវបានបោះបង់។'; if (err.name !== 'AbortError') showCustomAlert("Share Error", "មិនអាច Share បានតាម Web Share API។ សូមព្យាយាមម្តងទៀត។"); } } else { console.warn('Web Share API cannot share this data.'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'មិនអាច Share file បាន។'; showCustomAlert("Share Error", "Browser នេះមិនគាំទ្រការ Share file ទេ។ សូមធ្វើការ Screenshot ដោយដៃ។"); } } else { console.warn('Web Share API not supported.'); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Web Share មិនដំណើរការ។'; showCustomAlert("សូម Screenshot", "Browser នេះមិនគាំទ្រ Web Share API ទេ។ សូមធ្វើការ Screenshot វិក័យប័ត្រនេះដោយដៃ រួច Share ទៅ Telegram។"); } shareInvoiceBtn.disabled = false; }, 'image/png'); } catch (error) { console.error("Error generating or sharing invoice image:", error); if(invoiceShareStatus) invoiceShareStatus.textContent = 'Error!'; showCustomAlert("Error", `មានបញ្ហាក្នុងការបង្កើត ឬ Share រូបភាព: ${error.message}`); shareInvoiceBtn.disabled = false; } }
 
-// --- Event Handlers (ភ្ជាប់ទៅ UI.bindEventListeners) ---
+    // === Logic ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន ===
+    if (openDailyAttendanceBtn) {
+        openDailyAttendanceBtn.addEventListener('click', () => {
+            console.log("Opening Daily Attendance page...");
+            if (attendanceIframe) {
+                // កំណត់ src ដើម្បី​ចាប់ផ្តើម​ផ្ទុក (load) ទំព័រ
+                attendanceIframe.src = 'https://darotrb0-bit.github.io/MMKDailyattendance/';
+            }
+            navigateTo('page-daily-attendance');
+        });
+    }
 
-async function handleScanFace() {
-    console.log("Controller: handleScanFace");
-    if (!selectedUserId) {
-        UI.showCustomAlert("Error", "សូមជ្រើសរើសអត្តលេខរបស់អ្នកជាមុនសិន");
-        return;
-    }
-    const user = allUsersData.find(u => u.id === selectedUserId);
-    if (!user || !user.photo) {
-        UI.showCustomAlert("Error", "មិនអាចទាញយករូបថតយោងរបស់អ្នកបានទេ។ សូមទាក់ទង IT Support។");
-        return;
-    }
-    
-    UI.showFaceScanModal(true);
-    UI.setScanStatus('កំពុងព្យាយាមបើកកាមេរ៉ា...');
-    
-    try {
-        UI.setScanStatus('កំពុងវិភាគរូបថតយោង...');
-        const referenceDescriptor = await FaceScanner.getReferenceDescriptor(user.photo);
-        
-        UI.setScanStatus('កំពុងស្នើសុំបើកកាមេរ៉ា...');
-        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
-        
-        const videoEl = UI.getScanVideoElement();
-        if (videoEl) videoEl.srcObject = stream;
-        UI.setScanStatus('សូមដាក់មុខរបស់អ្នកឲ្យចំរង្វង់');
-        
-        FaceScanner.stopAdvancedFaceAnalysis(); // Clear old loops
+    if (closeAttendancePageBtn) {
+        closeAttendancePageBtn.addEventListener('click', () => {
+            console.log("Closing Daily Attendance page...");
+            if (attendanceIframe) {
+                // សំខាន់៖ ត្រូវ​កំណត់ src ទៅជាទទេ ដើម្បី​បិទ​កាមេរ៉ា
+                attendanceIframe.src = 'about:blank'; 
+            }
+            navigateTo('page-home');
+        });
+    }
 
-        const onSuccess = () => {
-            console.log("Controller: Login Scan Success!");
-            handleLoginSuccess(user); // ដំណើរការ Login
-            setTimeout(() => UI.showFaceScanModal(false), 1000);
-        };
-
-        FaceScanner.startAdvancedFaceAnalysis(
-            videoEl,
-            document.getElementById('scan-status'),
-            document.getElementById('scan-debug'),
-            referenceDescriptor,
-            onSuccess
-        );
-
-    } catch (error) {
-        console.error("Error during face scan process:", error);
-        UI.setScanStatus(`Error: ${error.message}`);
-        handleCancelScan(); // Stop video etc.
-        setTimeout(() => {
-            UI.showFaceScanModal(false);
-            UI.showCustomAlert("បញ្ហាស្កេនមុខ", `មានបញ្ហា៖\n${error.message}\nសូមប្រាកដថាអ្នកបានអនុញ្ញាតឲ្យប្រើកាមេរ៉ា។`);
-        }, 1500);
-    }
-}
-
-function handleCancelScan() {
-    FaceScanner.stopAdvancedFaceAnalysis();
-    const videoEl = UI.getScanVideoElement();
-    if (videoEl && videoEl.srcObject) {
-        videoEl.srcObject.getTracks().forEach(track => track.stop());
-        videoEl.srcObject = null;
-    }
-    FaceScanner.clearReferenceDescriptor();
-    console.log("Reference Descriptor Cleared on Cancel.");
-    UI.showFaceScanModal(false);
-}
-
-async function handleSubmitLeave() {
-    if (!currentUser) return UI.showCustomAlert("Error", "User មិនត្រឹមត្រូវ");
-    
-    const requestDataUI = UI.getLeaveRequestData();
-    if (!requestDataUI) return; 
-
-    UI.setLeaveRequestLoading(true);
-
-    try {
-        const requestId = `leave_${Date.now()}`;
-        const finalRequestData = {
-            userId: currentUser.id,
-            name: currentUser.name,
-            department: currentUser.department || 'N/A',
-            photo: currentUser.photo || null,
-            duration: requestDataUI.duration,
-            reason: requestDataUI.reason,
-            startDate: requestDataUI.startDate,
-            endDate: requestDataUI.endDate,
-            status: 'pending',
-            requestedAt: serverTimestamp(),
-            requestId: requestId,
-            firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user'
-        };
-
-        await Store.submitLeaveRequest(finalRequestData, requestDataUI.dateStringForTelegram);
-        
-        UI.setLeaveRequestLoading(false);
-        UI.showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success');
-        UI.navigateTo('page-history');
-    } catch (error) {
-        console.error("Error submitting leave request:", error);
-        UI.setLeaveRequestLoading(false);
-        UI.showCustomAlert("Error", `មានបញ្ហាពេលបញ្ជូនសំណើ: ${error.message}`);
-    }
-}
-
-async function handleSubmitOut() {
-    if (!currentUser) return UI.showCustomAlert("Error", "User មិនត្រឹមត្រូវ");
-    
-    const requestDataUI = UI.getOutRequestData();
-    if (!requestDataUI) return;
-
-    UI.setOutRequestLoading(true);
-
-    try {
-        const requestId = `out_${Date.now()}`;
-        const finalRequestData = {
-            userId: currentUser.id,
-            name: currentUser.name,
-            department: currentUser.department || 'N/A',
-            photo: currentUser.photo || null,
-            duration: requestDataUI.duration,
-            reason: requestDataUI.reason,
-            startDate: requestDataUI.startDate,
-            endDate: requestDataUI.endDate,
-            status: 'pending',
-            requestedAt: serverTimestamp(),
-            requestId: requestId,
-            firestoreUserId: auth.currentUser ? auth.currentUser.uid : 'unknown_auth_user'
-        };
-
-        await Store.submitOutRequest(finalRequestData);
-        
-        UI.setOutRequestLoading(false);
-        UI.showCustomAlert('ជោគជ័យ!', 'សំណើរបស់អ្នកត្រូវបានផ្ញើដោយជោគជ័យ!', 'success');
-        UI.navigateTo('page-history');
-    } catch (error) {
-        console.error("Error submitting out request:", error);
-        UI.setOutRequestLoading(false);
-        UI.showCustomAlert("Error", `មានបញ្ហាពេលបញ្ជូនសំណើ: ${error.message}`);
-    }
-}
-
-async function handleOpenEdit(requestId, type) {
-    isEditing = true;
-    UI.clearAllPendingTimers();
-    UI.setEditModalLoading(true); 
-    
-    try {
-        const data = await Store.setRequestStatusToEditing(requestId, type);
-        UI.openEditModal(data, type); 
-    } catch (e) {
-        console.error("Error opening edit modal:", e);
-        UI.setEditModalError(`Error: ${e.message}`);
-        isEditing = false;
-    }
-}
-
-async function handleCancelEdit() {
-    isEditing = false;
-    const requestId = document.getElementById('edit-request-id').value;
-    const type = (document.getElementById('edit-modal-title').textContent.includes("ឈប់")) ? 'leave' : 'out';
-    await Store.revertRequestStatusToPending(requestId, type);
-    UI.closeEditModal();
-}
-
-async function handleSubmitEdit() {
-    const editData = UI.getEditModalData(); 
-    if (!editData) return; 
-    UI.setEditModalLoading(true);
-    const requestId = document.getElementById('edit-request-id').value;
-    const type = (document.getElementById('edit-modal-title').textContent.includes("ឈប់")) ? 'leave' : 'out';
-
-    try {
-        await Store.submitRequestEdit(requestId, type, editData.newDuration, editData.newReason);
-        UI.closeEditModal();
-    } catch (e) {
-        console.error("Error submitting edit:", e);
-        UI.setEditModalError(`Error: ${e.message}`);
-    } finally {
-        UI.setEditModalLoading(false);
-        isEditing = false; 
-    }
-}
-
-async function handleSubmitDelete() {
-    const requestId = document.getElementById('delete-request-id').value;
-    const type = document.getElementById('delete-collection-type').value;
-
-    UI.setDeleteModalLoading(true);
-    try {
-        await Store.deleteRequest(requestId, type);
-        UI.closeDeleteModal();
-    } catch (e) {
-        console.error("Error deleting document:", e);
-        UI.showCustomAlert("Error", `មិនអាចលុបបានទេ។ ${e.message}`);
-    } finally {
-        UI.setDeleteModalLoading(false);
-    }
-}
-
-async function handleOpenReturn(requestId) {
-    console.log("Controller: handleOpenReturn", requestId);
-    if (!currentUser || !currentUser.photo) {
-        UI.showCustomAlert("Error", "មិនអាចទាញយករូបថតយោងរបស់អ្នកបានទេ។");
-        return;
-    }
-    
-    currentReturnRequestId = requestId; 
-    UI.openReturnScanModal(true);
-    UI.setReturnScanStatus('កំពុងព្យាយាមបើកកាមេរ៉ា...');
-    
-    try {
-        UI.setReturnScanStatus('កំពុងវិភាគរូបថតយោង...');
-        const referenceDescriptor = await FaceScanner.getReferenceDescriptor(currentUser.photo);
-        
-        UI.setReturnScanStatus('កំពុងស្នើសុំបើកកាមេរ៉ា...');
-        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
-        
-        const videoEl = UI.getReturnVideoElement();
-        if (videoEl) videoEl.srcObject = stream;
-        UI.setReturnScanStatus('សូមដាក់មុខរបស់អ្នកឲ្យចំរង្វង់');
-        
-        FaceScanner.stopAdvancedFaceAnalysis(); 
-
-        FaceScanner.startAdvancedFaceAnalysis(
-            videoEl,
-            document.getElementById('return-scan-status'),
-            document.getElementById('return-scan-debug'),
-            referenceDescriptor,
-            handleReturnFaceScanSuccess 
-        );
-
-    } catch (error) {
-        console.error("Error during return scan process:", error);
-        UI.setReturnScanStatus(`Error: ${error.message}`);
-        handleCancelReturn(); 
-        setTimeout(() => {
-            UI.closeReturnScanModal();
-            UI.showCustomAlert("បញ្ហាស្កេនមុខ", `មានបញ្ហា៖\n${error.message}\nសូមប្រាកដថាអ្នកបានអនុញ្ញាតឲ្យប្រើកាមេរ៉ា។`);
-        }, 1500);
-    }
-}
-
-function handleCancelReturn() {
-    FaceScanner.stopAdvancedFaceAnalysis();
-    const videoEl = UI.getReturnVideoElement();
-    if (videoEl && videoEl.srcObject) {
-        videoEl.srcObject.getTracks().forEach(track => track.stop());
-        videoEl.srcObject = null;
-    }
-    currentReturnRequestId = null;
-    UI.closeReturnScanModal();
-}
-
-function handleReturnFaceScanSuccess() {
-    console.log("Controller: Return Scan Success. Checking location...");
-    UI.setReturnScanStatus('ស្កេនមុខជោគជ័យ!\nកំពុងស្នើសុំទីតាំង...', 'សូមអនុញ្ញាតឲ្យប្រើ Location');
-    
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, { 
-            enableHighAccuracy: true, 
-            timeout: 10000, 
-            maximumAge: 0 
-        });
-    } else {
-        console.error("Geolocation is not supported.");
-        UI.showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE);
-        handleCancelReturn();
-    }
-}
-
-async function onLocationSuccess(position) {
-    const userLat = position.coords.latitude;
-    const userLng = position.coords.longitude;
-    console.log(`Location found: ${userLat}, ${userLng}`);
-    UI.setReturnScanStatus('បានទីតាំង! កំពុងពិនិត្យ...', `Lat: ${userLat.toFixed(6)}, Lng: ${userLng.toFixed(6)}`);
-
-    const isInside = Utils.isPointInPolygon([userLat, userLng], allowedAreaCoords);
-    
-    if (isInside) {
-        console.log("User is INSIDE.");
-        UI.setReturnScanStatus('ទីតាំងត្រឹមត្រូវ! កំពុងរក្សាទុក...');
-        try {
-            await Store.updateReturnStatus(currentReturnRequestId);
-            UI.showCustomAlert("ជោគជ័យ!", "បញ្ជាក់ការចូលមកវិញ បានជោគជ័យ!", "success");
-        } catch (e) {
-            console.error("Error updating Firestore return status:", e);
-            UI.showCustomAlert("Error", `មានបញ្ហាពេលរក្សាទុក: ${e.message}`);
-        } finally {
-            handleCancelReturn();
-        }
-    } else {
-        console.log("User is OUTSIDE.");
-        UI.setReturnScanStatus('ទីតាំងមិនត្រឹមត្រូវ។');
-        UI.showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE);
-        handleCancelReturn();
-    }
-}
-
-function onLocationError(error) {
-    console.error(`Geolocation Error (${error.code}): ${error.message}`);
-    UI.setReturnScanStatus('មិនអាចទាញយកទីតាំងបានទេ។');
-    UI.showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE);
-    handleCancelReturn();
-}
-
-async function handleOpenInvoice(requestId, type) {
-    if (!db || !requestId || !type) { return UI.showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Missing ID or Type)"); }
-    
-    // ត្រូវតែយក Paths ពី global state របស់ app.js (ដែលបាន set ពេល init)
-    const collectionPath = (type === 'leave') ? leaveRequestsCollectionPath : outRequestsCollectionPath; 
-    if (!collectionPath) { return UI.showCustomAlert("Error", "មិនអាចបើកវិក័យប័ត្របានទេ (Invalid Collection Path)"); }
-
-    try {
-        const docRef = doc(db, collectionPath, requestId); 
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) {
-            throw new Error("រកមិនឃើញសំណើរនេះទេ។");
-        }
-        UI.openInvoiceModal(docSnap.data(), type); // បញ្ជូន Data ទៅ UI
-    } catch (error) {
-        console.error("Error opening/populating invoice modal:", error);
-        UI.hideInvoiceModal();
-        UI.showCustomAlert("Error", `មិនអាចផ្ទុកទិន្នន័យវិក័យប័ត្របានទេ: ${error.message}`);
-    }
-}
-
-function handleHistoryTap(event) {
-    const invoiceBtn = event.target.closest('.invoice-btn');
-    const returnBtn = event.target.closest('.return-btn');
-    const editBtn = event.target.closest('.edit-btn');
-    const deleteBtn = event.target.closest('.delete-btn');
-
-    if (invoiceBtn) {
-        event.preventDefault();
-        handleOpenInvoice(invoiceBtn.dataset.id, invoiceBtn.dataset.type);
-    } else if (returnBtn) {
-        event.preventDefault();
-        handleOpenReturn(returnBtn.dataset.id);
-    } else if (editBtn) {
-        event.preventDefault();
-        handleOpenEdit(editBtn.dataset.id, editBtn.dataset.type);
-    } else if (deleteBtn) {
-        event.preventDefault();
-        UI.openDeleteModal(deleteBtn.dataset.id, deleteBtn.dataset.type);
-    }
-}
+}); // End of DOMContentLoaded
