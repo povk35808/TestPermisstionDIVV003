@@ -45,7 +45,7 @@ body { 
 /* Styles for Attendance Iframe Page */
 #attendance-iframe-container {
     /* 100vh (កម្ពស់​ពេញ) ដក 64px (កម្ពស់ header) */
-    height: calc(100vh - 64px); 
+    height: calc(100% - 64px); 
     width: 100%;
 }
 #attendance-iframe {
