@@ -2,10 +2,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, getDoc, collection, query, where, onSnapshot, serverTimestamp, Timestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// === START: MODIFICATION (Import ថ្មី) ===
+// នាំចូល (Import) ពី Modules ផ្សេងទៀត
 import * as FaceScanner from './face-scanner.js';
 import * as Utils from './utils.js'; // នាំចូល (Import) ពី utils.js
-// === END: MODIFICATION ===
 
 // Enable Firestore debug logging
 setLogLevel('debug');
@@ -24,10 +23,13 @@ let selectedLeaveReason = null;
 let selectedOutDuration = null;
 let selectedOutReason = null;
 
-let pendingAlertTimer15s = null;
-let pendingAlertTimer30s = null;
+// === START: MODIFICATION (Global Timers & State) ===
+let pendingAlertTimer20s = null; // Changed from 15s
+let pendingAlertTimer50s = null; // Changed from 30s
+let pendingAlertTimer120s = null; // New timer for 2 minutes
 let toastDisplayTimer = null;
 let isEditing = false; // តាមដាន Edit Modal
+// === END: MODIFICATION ===
 
 // المتغيرات​ថ្មី​សម្រាប់​ទំព័រ​វត្តមាន
 let openDailyAttendanceBtn, attendancePage, closeAttendancePageBtn, attendanceIframe;
@@ -44,12 +46,6 @@ let userSearchInput, userDropdown, userSearchError, scanFaceBtn, modelStatusEl, 
 
 // --- Duration/Reason Constants ---
 const leaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ", "មួយថ្ងៃកន្លះ", "ពីរថ្ងៃ", "ពីរថ្ងៃកន្លះ", "បីថ្ងៃ", "បីថ្ងៃកន្លះ", "បួនថ្ងៃ", "បួនថ្ងៃកន្លះ", "ប្រាំថ្ងៃ", "ប្រាំថ្ងៃកន្លះ", "ប្រាំមួយថ្ងៃ", "ប្រាំមួយថ្ងៃកន្លះ", "ប្រាំពីរថ្ងៃ"]; const leaveDurationItems = leaveDurations.map(d => ({ text: d, value: d })); const leaveReasons = ["ឈឺក្បាល", "ចុកពោះ", "គ្រុនក្ដៅ", "ផ្ដាសាយ"]; const leaveReasonItems = leaveReasons.map(r => ({ text: r, value: r })); const singleDayLeaveDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយយប់", "មួយថ្ងៃ"]; const outDurations = ["មួយព្រឹក", "មួយរសៀល", "មួយថ្ងៃ"]; const outDurationItems = outDurations.map(d => ({ text: d, value: d })); const outReasons = ["ទៅផ្សារ", "ទៅកាត់សក់", "ទៅភ្នំពេញ", "ទៅពេទ្យ", "ទៅយកអីវ៉ាន់"]; const outReasonItems = outReasons.map(r => ({ text: r, value: r })); const durationToDaysMap = { "មួយថ្ងៃកន្លះ": 1.5, "ពីរថ្ងៃ": 2, "ពីរថ្ងៃកន្លះ": 2.5, "បីថ្ងៃ": 3, "បីថ្ងៃកន្លះ": 3.5, "បួនថ្ងៃ": 4, "បួនថ្ងៃកន្លះ": 4.5, "ប្រាំថ្ងៃ": 5, "ប្រាំថ្ងៃកន្លះ": 5.5, "ប្រាំមួយថ្ងៃ": 6, "ប្រាំមួយថ្ងៃកន្លះ": 6.5, "ប្រាំពីរថ្ងៃ": 7 };
-
-// === START: MODIFICATION (Date Helpers ត្រូវបានលុប) ===
-// --- Date Helper Functions ---
-// (អនុគមន៍ទាំងអស់ ត្រូវបានផ្លាស់ទីទៅ utils.js)
-// === END: MODIFICATION ===
-
 
 // --- App Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -354,15 +350,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     function showCustomAlert(title, message, type = 'warning') { if (!customAlertModal) return; if (customAlertTitle) customAlertTitle.textContent = title; if (customAlertMessage) customAlertMessage.textContent = message; if (type === 'success') { if (customAlertIconSuccess) customAlertIconSuccess.classList.remove('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.add('hidden'); } else { if (customAlertIconSuccess) customAlertIconSuccess.classList.add('hidden'); if (customAlertIconWarning) customAlertIconWarning.classList.remove('hidden'); } customAlertModal.classList.remove('hidden'); }
     function hideCustomAlert() { if (customAlertModal) customAlertModal.classList.add('hidden'); }
 
-    // --- Pending Alert (Toast) Logic ---
+    // === START: MODIFICATION (Pending Alert Logic Updated) ===
     function showPendingAlert(message) {
         if (!pendingStatusAlert || !pendingStatusMessage) return;
         if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
         pendingStatusMessage.textContent = message;
         pendingStatusAlert.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds (Changed from 3)
         toastDisplayTimer = setTimeout(() => {
             hidePendingAlert();
-        }, 3000); 
+        }, 5000); 
     }
     function hidePendingAlert() {
         if (toastDisplayTimer) clearTimeout(toastDisplayTimer);
@@ -370,12 +368,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (pendingStatusAlert) pendingStatusAlert.classList.add('hidden');
     }
     function clearAllPendingTimers() {
-        if (pendingAlertTimer15s) clearTimeout(pendingAlertTimer15s);
-        if (pendingAlertTimer30s) clearTimeout(pendingAlertTimer30s);
-        pendingAlertTimer15s = null;
-        pendingAlertTimer30s = null;
+        if (pendingAlertTimer20s) clearTimeout(pendingAlertTimer20s);
+        if (pendingAlertTimer50s) clearTimeout(pendingAlertTimer50s);
+        if (pendingAlertTimer120s) clearTimeout(pendingAlertTimer120s); // Added 120s timer
+        pendingAlertTimer20s = null;
+        pendingAlertTimer50s = null;
+        pendingAlertTimer120s = null; // Added 120s timer
         hidePendingAlert(); 
     }
+    // === END: MODIFICATION ===
 
     // --- History Page Logic (Real-time) ---
     function setupHistoryListeners(currentEmployeeId) { console.log("Setting up history listeners for employee ID:", currentEmployeeId); if (historyUnsubscribe) historyUnsubscribe(); if (outHistoryUnsubscribe) outHistoryUnsubscribe(); if (!db || !currentEmployeeId) return console.error("Firestore DB not initialized or Employee ID not set."); const now = new Date(); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1); const startTimestamp = Timestamp.fromDate(startOfMonth); const endTimestamp = Timestamp.fromDate(endOfMonth); try { const leaveQuery = query(collection(db, leaveRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Leave Requests for current month..."); historyUnsubscribe = onSnapshot(leaveQuery, (snapshot) => { console.log(`Received LEAVE snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerLeave, historyPlaceholderLeave, 'leave'); }, (error) => { console.error("Error listening to LEAVE history:", error); if (historyPlaceholderLeave) { historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create LEAVE history query:", e); if (historyPlaceholderLeave) historyPlaceholderLeave.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderLeave.classList.remove('hidden'); } try { const outQuery = query(collection(db, outRequestsCollectionPath), where("userId", "==", currentEmployeeId), where("requestedAt", ">=", startTimestamp), where("requestedAt", "<", endTimestamp)); console.log("Querying Out Requests for current month..."); outHistoryUnsubscribe = onSnapshot(outQuery, (snapshot) => { console.log(`Received OUT snapshot. Size: ${snapshot.size}`); renderHistoryList(snapshot, historyContainerOut, historyPlaceholderOut, 'out'); }, (error) => { console.error("Error listening to OUT history:", error); if (historyPlaceholderOut) { historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: មិនអាចទាញយកប្រវត្តិបានទេ ${error.code.includes('permission-denied') ? '(Permission Denied)' : (error.code.includes('requires an index') ? '(ត្រូវបង្កើត Index សូមមើល Console)' : '')}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }); } catch (e) { console.error("Failed to create OUT history query:", e); if (historyPlaceholderOut) historyPlaceholderOut.innerHTML = `<p class="text-red-500">Error: ${e.message}</p>`; historyPlaceholderOut.classList.remove('hidden'); } }
@@ -402,39 +403,75 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return timeB - timeA;
             });
 
+            // === START: MODIFICATION (New Pending Alert Logic) ===
             if (requests.length > 0) {
                 const topRequest = requests[0];
+                
                 if (topRequest.status === 'pending') {
+                    
                     const requestedAtTime = topRequest.requestedAt?.toMillis();
                     if (requestedAtTime) {
                         const now = Date.now();
                         const pendingDurationMs = now - requestedAtTime; 
                         const pendingDurationSec = pendingDurationMs / 1000;
+
                         console.log(`Top request is pending for ${pendingDurationSec.toFixed(0)} seconds.`);
 
-                        if (pendingDurationSec < 15) {
-                            const timeTo15s = (15 - pendingDurationSec) * 1000;
-                            console.log(`Scheduling 15s timer in ${timeTo15s.toFixed(0)}ms`);
-                            pendingAlertTimer15s = setTimeout(() => {
+                        // 1. Timer 20s (Changed from 15s)
+                        if (pendingDurationSec < 20) {
+                            const timeTo20s = (20 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 20s timer in ${timeTo20s.toFixed(0)}ms`);
+                            pendingAlertTimer20s = setTimeout(() => {
                                 const historyPage = document.getElementById('page-history');
-                                if (isEditing) return console.log("15s Timer: Canceled (User is editing).");
-                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("15s Timer: Canceled (Not on history page).");
+                                if (isEditing) return console.log("20s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("20s Timer: Canceled (Not on history page).");
+                                
                                 showPendingAlert("សំណើររបស់អ្នកមានការយឺតយ៉ាវបន្តិចប្រហែល Admin ជាប់រវល់ការងារច្រើន ឬសំណើររបស់អ្នកមានបញ្ហាខុសលក្ខខ័ណ្ឌអ្វីមួយ!");
-                            }, timeTo15s);
+                            }, timeTo20s);
                         }
-                        if (pendingDurationSec < 30) {
-                            const timeTo30s = (30 - pendingDurationSec) * 1000;
-                            console.log(`Scheduling 30s timer in ${timeTo30s.toFixed(0)}ms`);
-                            pendingAlertTimer30s = setTimeout(() => {
+
+                        // 2. Timer 50s (Changed from 30s) + Telegram Reminder
+                        if (pendingDurationSec < 50) {
+                            const timeTo50s = (50 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 50s timer in ${timeTo50s.toFixed(0)}ms`);
+                            pendingAlertTimer50s = setTimeout(() => {
                                 const historyPage = document.getElementById('page-history');
-                                if (isEditing) return console.log("30s Timer: Canceled (User is editing).");
-                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("30s Timer: Canceled (Not on history page).");
+                                if (isEditing) return console.log("50s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("50s Timer: Canceled (Not on history page).");
+
                                 showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
-                            }, timeTo30s);
+                                
+                                // Send Telegram Reminder
+                                let reminderMsg = `<b>🔔 REMINDER (50s) 🔔</b>\n\n`;
+                                reminderMsg += `Request <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> is still pending.`;
+                                sendTelegramNotification(reminderMsg);
+
+                            }, timeTo50s);
+                        }
+
+                        // 3. Timer 120s (2 minutes) + Telegram Reminder
+                        if (pendingDurationSec < 120) {
+                            const timeTo120s = (120 - pendingDurationSec) * 1000;
+                            console.log(`Scheduling 120s timer in ${timeTo120s.toFixed(0)}ms`);
+                            pendingAlertTimer120s = setTimeout(() => {
+                                const historyPage = document.getElementById('page-history');
+                                if (isEditing) return console.log("120s Timer: Canceled (User is editing).");
+                                if (historyPage && historyPage.classList.contains('hidden')) return console.log("120s Timer: Canceled (Not on history page).");
+
+                                showPendingAlert("សូមរង់ចាំបន្តិច! ប្រព័ន្ធនិងផ្ដល់សារស្វ័យប្រវត្តិរលឹកដល់ Admin ពីសំណើររបស់អ្នក!");
+                                
+                                // Send 2nd Telegram Reminder
+                                let reminderMsg = `<b>🔔 SECOND REMINDER (2min) 🔔</b>\n\n`;
+                                reminderMsg += `Request <b>(ID: ${topRequest.requestId})</b> from <b>${topRequest.name}</b> has been pending for 2 minutes. Please check.`;
+                                sendTelegramNotification(reminderMsg);
+
+                            }, timeTo120s);
                         }
                     }
                 }
             }
+            // === END: MODIFICATION ===
+
             requests.forEach(request => container.innerHTML += renderHistoryCard(request, type));
         }
 
@@ -453,7 +490,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateOutButtonState(hasActiveOut);
         }
     }
-
     function renderHistoryCard(request, type) { if (!request || !request.requestId) return ''; let statusColor, statusText, decisionInfo = ''; switch(request.status) { case 'approved': statusColor = 'bg-green-100 text-green-800'; statusText = 'បានយល់ព្រម'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-green-600 mt-1">នៅម៉ោង: ${Utils.formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'rejected': statusColor = 'bg-red-100 text-red-800'; statusText = 'បានបដិសធ'; if (request.decisionAt) decisionInfo = `<p class="text-xs text-red-600 mt-1">នៅម៉ោង: ${Utils.formatFirestoreTimestamp(request.decisionAt, 'time')}</p>`; break; case 'editing': statusColor = 'bg-blue-100 text-blue-800'; statusText = 'កំពុងកែសម្រួល'; break; default: statusColor = 'bg-yellow-100 text-yellow-800'; statusText = 'កំពុងរង់ចាំ'; } const dateString = (request.startDate === request.endDate) ? request.startDate : (request.startDate && request.endDate ? `${request.startDate} ដល់ ${request.endDate}` : 'N/A'); const showActions = (request.status === 'pending' || request.status === 'editing'); let returnInfo = ''; let returnButton = ''; if (type === 'out') { if (request.returnStatus === 'បានចូលមកវិញ') returnInfo = `<p class="text-sm font-semibold text-green-700 mt-2">✔️ បានចូលមកវិញ: ${request.returnedAt || ''}</p>`; else if (request.status === 'approved') returnButton = `<button data-id="${request.requestId}" class="return-btn w-full mt-3 py-2 px-3 bg-green-600 text-white rounded-lg font-semibold text-sm shadow-sm hover:bg-green-700">បញ្ជាក់ចូលមកវិញ</button>`; } let invoiceButton = ''; if (request.status === 'approved') invoiceButton = `<button data-id="${request.requestId}" data-type="${type}" class="invoice-btn mt-3 py-1.5 px-3 bg-indigo-100 text-indigo-700 rounded-md font-semibold text-xs shadow-sm hover:bg-indigo-200 w-full sm:w-auto">ពិនិត្យមើលវិក័យប័ត្រ</button>`; return `<div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-4"><div class="flex justify-between items-start"><span class="font-semibold text-gray-800">${request.duration || 'N/A'}</span><span class="text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}">${statusText}</span></div><p class="text-sm text-gray-600 mt-1">${dateString}</p><p class="text-sm text-gray-500 mt-1"><b>មូលហេតុ:</b> ${request.reason || 'មិនបានបញ្ជាក់'}</p>${decisionInfo}${returnInfo}<div class="mt-3 pt-3 border-t border-gray-100"><div class="flex flex-wrap justify-between items-center gap-2"><p class="text-xs text-gray-400">ID: ${request.requestId}</p>${showActions ? `<div class="flex space-x-2"><button data-id="${request.requestId}" data-type="${type}" class="edit-btn p-1 text-blue-600 hover:text-blue-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button><button data-id="${request.requestId}" data-type="${type}" class="delete-btn p-1 text-red-600 hover:text-red-800"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div>` : ''}${invoiceButton}</div>${returnButton}</div></div>`; }
     function updateLeaveButtonState(isDisabled) {
         if (!openLeaveRequestBtn) return; 
@@ -642,7 +678,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (isSingleDay) {
                 let singleDateVal = editLeaveDateSingle.value; 
-                if (!singleDateVal || !Utils.parseDdMmmYyyyToInputFormat(singleDateVal)) { // Check if it's not dd-Mmm-yyyy
+                if (!singleDateVal || !Utils.parseDdMmmYyyyToInputFormat(singleDateVal)) { 
                     singleDateVal = Utils.formatDateToDdMmmYyyy(editLeaveDateStart.value); 
                 }
                 finalStartDate = singleDateVal;
@@ -755,7 +791,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     function handleReturnFaceScanSuccess() { if (returnScanStatusEl) returnScanStatusEl.textContent = 'ស្កេនមុខជោគជ័យ!\nកំពុងស្នើសុំទីតាំង...'; if (returnScanDebugEl) returnScanDebugEl.textContent = 'សូមអនុញ្ញាតឲ្យប្រើ Location'; if (navigator.geolocation) { navigator.geolocation.getCurrentPosition(onLocationSuccess, onLocationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }); } else { console.error("Geolocation is not supported."); showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; } }
     async function onLocationSuccess(position) { const userLat = position.coords.latitude; const userLng = position.coords.longitude; console.log(`Location found: ${userLat}, ${userLng}`); if (returnScanStatusEl) returnScanStatusEl.textContent = 'បានទីតាំង! កំពុងពិនិត្យ...'; if (returnScanDebugEl) returnScanDebugEl.textContent = `Lat: ${userLat.toFixed(6)}, Lng: ${userLng.toFixed(6)}`; 
-        // === MODIFICATION: Call Utils.isPointInPolygon ===
         const isInside = Utils.isPointInPolygon([userLat, userLng], allowedAreaCoords); 
         if (isInside) { console.log("User is INSIDE."); if (returnScanStatusEl) returnScanStatusEl.textContent = 'ទីតាំងត្រឹមត្រូវ! កំពុងរក្សាទុក...'; await updateReturnStatusInFirestore(); } else { console.log("User is OUTSIDE."); if (returnScanStatusEl) returnScanStatusEl.textContent = 'ទីតាំងមិនត្រឹមត្រូវ។'; showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; } }
     function onLocationError(error) { console.error(`Geolocation Error (${error.code}): ${error.message}`); if (returnScanStatusEl) returnScanStatusEl.textContent = 'មិនអាចទាញយកទីតាំងបានទេ។'; showCustomAlert("បញ្ហាទីតាំង", LOCATION_FAILURE_MESSAGE); if (returnScanModal) returnScanModal.classList.add('hidden'); currentReturnRequestId = null; }
